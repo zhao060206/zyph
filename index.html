@@ -618,6 +618,15 @@ html[data-theme="bright"] .atab:hover{background:rgba(0,0,0,.05)}
   padding-top:11px;border-top:1px dashed var(--border);font-family:var(--sans)}
 .admin-btn-lg{width:100%;margin-top:6px}
 
+/* 老照片补预览图区块 */
+.tn-fix{margin-top:14px;padding:14px;border-radius:12px;
+  background:rgba(255,209,102,.06);border:1px solid rgba(255,209,102,.28)}
+.tn-fix-t{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--sun);margin-bottom:7px}
+.tn-fix-d{font-size:11.5px;line-height:1.8;color:var(--text-dim);margin-bottom:11px;font-family:var(--sans)}
+.tn-fix-d b{color:var(--sun);font-weight:600}
+html[data-theme="bright"] .tn-fix{background:rgba(217,142,43,.07);border-color:rgba(217,142,43,.3)}
+html[data-theme="bright"] .tn-fix-d b{color:#B57518}
+
 .admin-sec{margin-bottom:18px;padding:16px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--border)}
 .admin-sec-t{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--sun);margin-bottom:12px}
 .admin-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
@@ -1102,6 +1111,15 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
       <div class="pane-intro">点下面按钮载入云端照片列表,然后就能逐张删除、替换或修改介绍。</div>
       <button class="admin-btn admin-btn-lg" id="manageLoad" type="button">载入已上传照片</button>
       <div class="mg-list" id="mgList" hidden></div>
+
+      <!-- 为老照片补生成预览图(一次性,之后上传会自动生成) -->
+      <div class="tn-fix" id="tnFixBox" hidden>
+        <div class="tn-fix-t">让老照片也变快</div>
+        <div class="tn-fix-d" id="tnFixInfo">检测中…</div>
+        <button class="admin-btn admin-btn-lg" id="tnFixBtn" type="button">为老照片生成预览图</button>
+        <div class="pane-note">说明:早期上传的照片没有压缩版,访客浏览时会加载十几 MB 的原图,这是页面卡顿的原因。点上面按钮会为它们逐个生成小版本(480px 和 1600px),之后访客只看小图,秒开。<br>耗时取决于照片数量,中途请勿关闭页面。原图不会被修改或删除。</div>
+      </div>
+
       <div class="pane-note">删除会同时移除云端文件,组内最后一张被删时整组一并移除;替换会为新文件重新识别参数并移除旧文件;介绍在输入框失焦时自动保存。点缩略图可在新标签查看原图。</div>
     </div>
 
@@ -1269,20 +1287,118 @@ const CONFIG={
   apiBase:''                    /* 互动接口地址:同源部署留空即可(走相对路径 /api/…);前后端分域时填后端完整域名 */
 };
 
-/* 图片 URL:远程走 COS+缩略图参数,演示走 Unsplash */
+const cosURL=k=>`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`;
+
+/* ═══════ 预览图压缩 ═══════
+   为什么需要:原图单张 12~20MB,访客列表里每张"小图"都在下原图,几十张就卡死。
+   做法:上传时在浏览器里把原图压成两个小版本另存到云端,访客只加载小版本:
+     · 480px  → 列表/组页缩略图(约 40KB,是原图的 1/300)
+     · 1600px → 悬浮窗查看(约 400KB,全屏看也清晰)
+   原图保持不动,只在点"下载原图"或长按保存时加载。
+   命名:原图 photos/D/1_x.jpg → 小图 photos/D/1_x_t480.jpg / _t1600.jpg
+   旧数据没有小图时自动回退原图,不会白屏 */
+const Thumb={
+  SMALL:480,
+  VIEW:1600,
+  Q_SMALL:0.82,
+  Q_VIEW:0.86,
+  /* 由原图 key 派生出小图 key */
+  key(k,size){return String(k).replace(/(\.[a-z0-9]+)$/i,'_t'+size+'$1')},
+  /* 该照片是否有可用小图 */
+  has(p){return !!(p&&p.tn&&p.tn.s)},
+  /* 把 File/Blob 或已有图片 URL 压成指定长边的小图,返回 Blob */
+  async make(src,max,q){
+    let bitmap=null,url=null;
+    try{
+      if(src instanceof Blob){
+        /* createImageBitmap 自带 EXIF 方向处理;旧内核回退到 <img> */
+        if(window.createImageBitmap){
+          try{bitmap=await createImageBitmap(src,{imageOrientation:'from-image'})}catch(e){bitmap=null}
+        }
+        if(!bitmap)url=URL.createObjectURL(src);
+      }else{
+        url=src;
+      }
+      let img=bitmap;
+      if(!img){
+        img=await new Promise((res,rej)=>{
+          const im=new Image();
+          /* 跨域图片要带 crossOrigin 才能进 canvas 导出,否则 toBlob 会因污染抛错 */
+          if(!/^blob:|^data:/.test(url))im.crossOrigin='anonymous';
+          im.onload=()=>res(im);
+          im.onerror=()=>rej(new Error('图片读取失败'));
+          im.src=url;
+        });
+      }
+      const w0=img.width||img.naturalWidth,h0=img.height||img.naturalHeight;
+      if(!w0||!h0)throw new Error('图片尺寸无效');
+      const scale=Math.min(1,max/Math.max(w0,h0));
+      const w=Math.max(1,Math.round(w0*scale)),h=Math.max(1,Math.round(h0*scale));
+      const c=document.createElement('canvas');
+      c.width=w;c.height=h;
+      const ctx=c.getContext('2d');
+      /* 缩小图片时开启高质量插值,避免锯齿 */
+      if(ctx.imageSmoothingEnabled!==undefined){ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high'}
+      /* 白色垫底:PNG 透明区转 JPEG 后不会变黑 */
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img,0,0,w,h);
+      const blob=await new Promise(res=>{
+        if(c.toBlob)c.toBlob(res,'image/jpeg',q);
+        else{   /* 极老内核回退 dataURL */
+          try{
+            const d=c.toDataURL('image/jpeg',q);
+            const b=atob(d.split(',')[1]);
+            const arr=new Uint8Array(b.length);
+            for(let i=0;i<b.length;i++)arr[i]=b.charCodeAt(i);
+            res(new Blob([arr],{type:'image/jpeg'}));
+          }catch(e){res(null)}
+        }
+      });
+      if(!blob)throw new Error('压缩导出失败');
+      return blob;
+    }finally{
+      if(bitmap&&bitmap.close)bitmap.close();
+      if(src instanceof Blob&&url&&url.startsWith('blob:'))URL.revokeObjectURL(url);
+    }
+  },
+  /* 为一张照片生成两档小图,返回 {s:key,v:key}(原图 key 不存在时返回 null) */
+  async build(k,source){
+    if(!k)return null;
+    const out={};
+    const small=await this.make(source,this.SMALL,this.Q_SMALL);
+    out.s=this.key(k,this.SMALL);
+    out._smallBlob=small;
+    const view=await this.make(source,this.VIEW,this.Q_VIEW);
+    out.v=this.key(k,this.VIEW);
+    out._viewBlob=view;
+    return out;
+  }
+};
+
+/* 图片 URL:优先生成的小图 → 没有则回退原图(旧数据) */
 const pURL=(p,w)=>{
-  if(p.k)return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}?imageMogr2/thumbnail/${w}x`;
+  if(p.k){
+    /* 列表(≤600)取 480 小图;中等尺寸取 1600;更大的直接用 1600 兜底 */
+    if(p.tn){
+      if(w<=600&&p.tn.s)return cosURL(p.tn.s);
+      if(p.tn.v)return cosURL(p.tn.v);
+    }
+    return cosURL(p.k);   /* 无小图:回退原图,行为与旧版一致 */
+  }
   return U(p.u,w);
 };
+/* 打开大图时加载的"查看版":有 1600 小图就用它,否则回退原图 */
+const pView=p=>{
+  if(p.k){
+    if(p.tn&&p.tn.v)return cosURL(p.tn.v);
+    return cosURL(p.k);
+  }
+  return U(p.u,document.documentElement.classList.contains('lite')?1200:2400);
+};
+/* 原图:只在"下载/长按保存"时使用,访客平常浏览不会加载 */
 const pFull=p=>{
-  /* 手机屏幕不需要整张原图:解码一张 4000px JPEG 要上百毫秒主线程,
-     是"点开大图瞬间卡一下"的直接原因;lite 下无论 COS 还是演示图都取 ≤1600px
-     (COS 走 imageMogr2 缩略,观感在手机无可感知差异,长按保存仍是高清),桌面取原图 */
-  var lite=document.documentElement.classList.contains('lite');
-  if(p.k)return lite
-    ?`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}?imageMogr2/thumbnail/1600x`
-    :`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}`;
-  return U(p.u,lite?1200:2400);
+  if(p.k)return cosURL(p.k);
+  return U(p.u,document.documentElement.classList.contains('lite')?1200:2400);
 };
 
 /* ─── 数据仓库:优先读 COS 上的 data.json,读不到用内置演示数据 ─── */
@@ -2347,17 +2463,45 @@ const Lightbox={
     $('#lbCaption').textContent=(p.d&&p.d.trim())?p.d.trim():(g.c||'');
     /* 互动区:切到这张照片的点赞与评论(数据来自 COS) */
     Social.bind(g,p);
-    /* 渐进加载:先显示 1800px 预览(秒开),后台静默预载原图,
-       解码完成后(img.decode,旧内核自动回退直换)无缝替换 <img> 指向。
-       微信/QQ 内长按图片 →「保存图片」,浏览器保存的就是 <img> 当前 src,
-       因此替换完成后直接长按保存到的即原图,而非预览图 */
+    /* ── 三层渐进加载 ──
+       ① 立刻显示 480px 小图(约 40KB,秒开,通常已在浏览器缓存里)
+       ② 后台加载 1600px 查看版(约 400KB)替换,全屏看也清晰
+       ③ 原图(12~20MB)只在点"下载原图"或长按时才加载,平常绝不触碰
+       微信/QQ 内长按图片保存的是 <img> 当前 src,因此长按前会先把原图换上去
+       (见 #lbDownload 的 mobile 分支),保证存下来的是原图 */
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
-    const full=pFull(p);
-    const prev=pURL(p,document.documentElement.classList.contains('lite')?900:1800);
     const stale=()=>this.g!==g||this.g.gs[this.cur]!==p;
-    this.img.src=prev;
-    if(full===prev){this._q('原图已就绪','ready');return}
-    this._q(this.mobile?'原图加载中 · 稍候再长按':'原图加载中 …','load');
+    const view=pView(p);
+    const small=pURL(p,Thumb.SMALL);
+    const full=pFull(p);
+    /* 小图加载失败时自动回退原图:小图可能是上传失败或已被删除的残留记录,
+       不能让访客看到破图 */
+    const guardNew=()=>{
+      const img=this.img;
+      const onErr=()=>{
+        img.removeEventListener('error',onErr);
+        if(stale())return;
+        if(img.src!==full){img.src=full;this._q('已回退原图','ready')}
+      };
+      img.addEventListener('error',onErr);
+      this._imgErrGuard=onErr;
+    };
+    if(this._imgErrGuard){this.img.removeEventListener('error',this._imgErrGuard);this._imgErrGuard=null}
+    if(view===small){
+      /* 这张没有小图(旧数据):直接按原方式加载原图,行为与旧版一致 */
+      this._q('原图加载中 …','load');
+      guardNew();
+      this.img.onload=()=>{
+        this.img.onload=null;
+        if(stale())return;
+        this._q(this.mobile?'原图已就绪 · 长按即可保存':'原图已就绪','ready');
+      };
+      this.img.src=full;
+      return;
+    }
+    guardNew();
+    this.img.src=small;
+    this._q('高清图加载中 …','load');
     const pre=new Image();
     pre.referrerPolicy='no-referrer';
     this._pre=pre;
@@ -2365,14 +2509,18 @@ const Lightbox={
       if(stale())return;
       const swap=()=>{
         if(stale())return;
-        this.img.src=full;   /* 原图已在缓存,替换瞬时完成 */
-        this._q(this.mobile?'原图已就绪 · 长按即可保存':'原图已就绪','ready');
+        this.img.src=view;   /* 已在缓存,替换瞬时完成 */
+        this._q(this.mobile?'长按可存高清图 · 要原图点下方按钮':'高清图已就绪 · 原图请点下载','ready');
       };
-      /* decode():离屏解码完再上屏,避免大图切换瞬间主线程掉帧;旧内核无此 API 自动回退 */
       if(pre.decode){pre.decode().then(swap).catch(swap)}else{swap()}
     };
-    pre.onerror=()=>{if(!stale())this._q('原图暂不可用 · 长按仅为预览','fail')};
-    pre.src=full;
+    pre.onerror=()=>{
+      if(stale())return;
+      /* 1600 版取不到:退回原图,别让访客停在小图上 */
+      this.img.src=full;
+      this._q('已回退原图','ready');
+    };
+    pre.src=view;
   }
 };
 
@@ -2559,6 +2707,8 @@ const Admin={
     $('#afFiles').addEventListener('change',()=>this.autofillExif());
     /* 已上传照片管理:载入 + 列表事件委托(删/换/介绍失焦保存/缩略图新标签打开) */
     $('#manageLoad').addEventListener('click',()=>this.loadManage());
+    const tnBtn=$('#tnFixBtn');
+    if(tnBtn&&!tnBtn.dataset.bound){tnBtn.dataset.bound='1';tnBtn.addEventListener('click',()=>this.tnRebuild())}
     const mg=$('#mgList');
     mg.addEventListener('click',ev=>{
       const b=ev.target.closest('.mg-btn,.mg-thumb');
@@ -2781,6 +2931,7 @@ const Admin={
       }catch(e){}
       this.mgData=data;
       this.renderManage();
+      this.tnScan();   /* 检测有多少老照片还没生成预览图 */
     }catch(err){
       box.innerHTML=`<div class="mg-empty">读取失败:${esc(err&&err.message?err.message:'未知错误')} · 请稍后重试</div>`;
     }finally{
@@ -2799,7 +2950,7 @@ const Admin={
         const ex=(p.exif||'').replace(/<br>/g,' · ');
         return `
         <div class="mg-ph" data-d="${g.d}" data-i="${i}">
-          <img class="mg-thumb" src="${this.cosURL(p.k)}?imageMogr2/thumbnail/160x" alt="${esc(p.t||'')}" title="点击在新标签打开原图" data-act="open" data-k="${esc(p.k)}">
+          <img class="mg-thumb" src="${p.tn&&p.tn.s?cosURL(p.tn.s):cosURL(p.k)}" alt="${esc(p.t||'')}" title="点击在新标签打开原图" data-act="open" data-k="${esc(p.k)}" loading="lazy">
           <div class="mg-main">
             <div class="mg-line">
               <span class="mg-num">${String(i+1).padStart(2,'0')}</span>
@@ -2831,6 +2982,86 @@ const Admin={
     return this.put('data.json',new Blob([JSON.stringify(this.mgData,null,1)],{type:'application/json'}))
       .then(()=>Bus.emit('archive:reload'))
       .then(()=>{this.renderManage();if(okMsg)this.status(okMsg,'ok')});
+  },
+  /* ─── 老照片补预览图 ───
+     早期上传的照片没有压缩版,访客浏览会下原图(12~20MB)导致卡顿。
+     这里逐个下载原图 → 浏览器内压成 480/1600 → 上传到 COS → 回写 data.json */
+  tnScan(){
+    const box=$('#tnFixBox'),info=$('#tnFixInfo');
+    if(!box||!info)return;
+    const data=this.mgData;
+    if(!data||!data.groups.length){box.hidden=true;return}
+    const todo=[];
+    data.groups.forEach(g=>{
+      (g.gs||[]).forEach((p,i)=>{if(p.k&&!(p.tn&&p.tn.s))todo.push({g,p,i})});
+    });
+    box.hidden=false;
+    if(!todo.length){
+      info.innerHTML='全部照片都已生成预览图,访客端已是最快状态。';
+      $('#tnFixBtn').disabled=true;
+      $('#tnFixBtn').textContent='无需处理';
+      return;
+    }
+    info.innerHTML=`检测到 <b>${todo.length} 张</b>老照片还没有预览图,访客打开它们时会下载十几 MB 的原图。`;
+    $('#tnFixBtn').disabled=false;
+    $('#tnFixBtn').textContent='为这 '+todo.length+' 张生成预览图';
+  },
+  async tnRebuild(){
+    const cos=await this.client();
+    if(!cos)return;
+    const data=this.mgData;
+    if(!data)return;
+    const todo=[];
+    data.groups.forEach(g=>{
+      (g.gs||[]).forEach((p,i)=>{if(p.k&&!(p.tn&&p.tn.s))todo.push({g,p,i})});
+    });
+    if(!todo.length){this.status('没有需要处理的照片','ok');return}
+    if(!confirm(`将为 ${todo.length} 张照片生成并上传预览图。\n\n原图不会被修改或删除,只是额外存两个小版本。\n过程中请保持页面打开,不要关闭。\n\n开始吗?`))return;
+    const btn=$('#tnFixBtn');
+    btn.disabled=true;
+    const t0=Date.now();
+    let done=0,fail=0,savedKB=0;
+    for(const item of todo){
+      const {g,p,i}=item;
+      btn.textContent=`处理中 ${done+fail+1}/${todo.length} …`;
+      this.status(`正在生成预览图 ${done+fail+1}/${todo.length} · ${p.t||''}`);
+      try{
+        /* 1. 下载原图(带 crossOrigin 才能进 canvas 导出) */
+        const url=cosURL(p.k);
+        const resp=await fetch(url,{mode:'cors'});
+        if(!resp.ok)throw new Error('原图下载失败 '+resp.status);
+        const srcBlob=await resp.blob();
+        /* 2. 压成两档并上传 */
+        const smallBlob=await Thumb.make(srcBlob,Thumb.SMALL,Thumb.Q_SMALL);
+        const smallKey=Thumb.key(p.k,Thumb.SMALL);
+        await this.put(smallKey,smallBlob);
+        const viewBlob=await Thumb.make(srcBlob,Thumb.VIEW,Thumb.Q_VIEW);
+        const viewKey=Thumb.key(p.k,Thumb.VIEW);
+        await this.put(viewKey,viewBlob);
+        /* 3. 记录小图 key(原图与小图大小对比,用于展示省了多少流量) */
+        p.tn={s:smallKey,v:viewKey};
+        savedKB+=Math.max(0,(srcBlob.size-smallBlob.size)/1024);
+        done++;
+      }catch(e){
+        fail++;
+        console.warn('预览图生成失败:',p.k,e&&e.message);
+      }
+      /* 每张处理完就写回一次,中途中断也不会全部白做 */
+      if(done%3===0||done+fail===todo.length){
+        try{await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}))}catch(e){}
+      }
+    }
+    /* 最终写回 + 刷新访客端数据 */
+    try{
+      await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+      await Bus.emit('archive:reload');
+    }catch(e){}
+    const sec=Math.round((Date.now()-t0)/1000);
+    this.status(`预览图完成:成功 ${done} 张${fail?` · <span class="no">失败 ${fail} 张(可重试)</span>`:''} · 耗时 ${sec} 秒<br>访客端每次浏览约省下 <span class="ok">${Math.round(savedKB/1024)} MB</span> 流量,照片打开速度大幅提升`,fail?'no':'ok');
+    btn.disabled=false;
+    btn.textContent='重新检测';
+    this.tnScan();
+    this.renderManage();
   },
   async mgDelete(d,i){
     if(!await this.client())return;   /* 删除需密钥:client() 已提示"请先保存密钥" */
@@ -3033,6 +3264,23 @@ const Admin={
         if(ok){
           const ph={t:`${title} · ${String(i+1).padStart(2,'0')}`,k:key,exif:this._exifs[i]||''};
           if(_dc[i])ph.d=_dc[i];
+          /* ── 生成并上传小图(480 + 1600) ──
+             这一步是"访客端不卡"的关键:原图 12~20MB 留在云端不动,
+             另外存两个压缩版,访客平常只看小版本。
+             小图上传失败不影响照片入库(只是访客端回退原图),不阻断整批。 */
+          this.prog(Math.round((i+0.5)/files.length*90),`生成预览图 ${i+1}/${files.length} …`);
+          try{
+            const small=await Thumb.make(f,Thumb.SMALL,Thumb.Q_SMALL);
+            const smallKey=Thumb.key(key,Thumb.SMALL);
+            await this.put(smallKey,small);
+            const view=await Thumb.make(f,Thumb.VIEW,Thumb.Q_VIEW);
+            const viewKey=Thumb.key(key,Thumb.VIEW);
+            await this.put(viewKey,view);
+            ph.tn={s:smallKey,v:viewKey};
+          }catch(e){
+            /* 压缩或上传失败:这张照常入库,访客端自动回退原图 */
+            console.warn('预览图生成失败('+key+'):',e&&e.message);
+          }
           gs.push(ph);
         }
         else fails.push(String(i+1));
