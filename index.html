@@ -1122,6 +1122,14 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
         <div class="pane-note">说明:早期上传的照片没有压缩版,访客浏览时会加载十几 MB 的原图,这是页面卡顿的原因。点上面按钮会为它们逐个生成小版本(480px 和 1600px),之后访客只看小图,秒开。<br>耗时取决于照片数量,中途请勿关闭页面。原图不会被修改或删除。</div>
       </div>
 
+      <!-- 清理"文件已删、记录还在"的残影照片 -->
+      <div class="tn-fix" id="orphanBox" hidden>
+        <div class="tn-fix-t">清理失效照片</div>
+        <div class="tn-fix-d" id="orphanInfo">检测中…</div>
+        <button class="admin-btn admin-btn-lg" id="orphanBtn" type="button">检查并清理失效照片</button>
+        <div class="pane-note">如果某张照片显示为破图、点开是空白,说明它在云端已被删除但列表里还留着记录(早期删除功能的缺陷会造成这种情况)。点上面按钮会自动找出并清理掉这些记录。<br>只修改列表数据,不会删除任何仍在云端的文件。</div>
+      </div>
+
       <div class="pane-note">删除会同时移除云端文件,组内最后一张被删时整组一并移除;替换会为新文件重新识别参数并移除旧文件;介绍在输入框失焦时自动保存。点缩略图可在新标签查看原图。</div>
     </div>
 
@@ -2711,6 +2719,8 @@ const Admin={
     $('#manageLoad').addEventListener('click',()=>this.loadManage());
     const tnBtn=$('#tnFixBtn');
     if(tnBtn&&!tnBtn.dataset.bound){tnBtn.dataset.bound='1';tnBtn.addEventListener('click',()=>this.tnRebuild())}
+    const orBtn=$('#orphanBtn');
+    if(orBtn&&!orBtn.dataset.bound){orBtn.dataset.bound='1';orBtn.addEventListener('click',()=>this.orphanRebuild())}
     const mg=$('#mgList');
     mg.addEventListener('click',ev=>{
       const b=ev.target.closest('.mg-btn,.mg-thumb');
@@ -2904,9 +2914,15 @@ const Admin={
     }
     return this.cos;
   },
-  put(key,body,onProg){
+  /* 上传对象。自己确保 COS 客户端已就绪:
+     删除改走后端接口后不再经过 client(),若这里不主动初始化,
+     在"打开面板直接删除"这种路径下 this.cos 仍是 null,写 data.json 会崩,
+     导致照片已从云端删掉、前端却还显示 —— 所以在此兜底获取。 */
+  async put(key,body,onProg){
+    const cos=await this.client();
+    if(!cos)throw new Error('COS 未就绪(密钥或 SDK 加载失败)');
     return new Promise((res,rej)=>{
-      this.cos.putObject({Bucket:CONFIG.cosBucket,Region:CONFIG.cosRegion,Key:key,Body:body,
+      cos.putObject({Bucket:CONFIG.cosBucket,Region:CONFIG.cosRegion,Key:key,Body:body,
         onProgress:e=>onProg&&onProg(e)},(err,data)=>err?rej(err):res(data));
     });
   },
@@ -2953,7 +2969,8 @@ const Admin={
       }catch(e){}
       this.mgData=data;
       this.renderManage();
-      this.tnScan();   /* 检测有多少老照片还没生成预览图 */
+      this.tnScan();       /* 检测有多少老照片还没生成预览图 */
+      this.orphanScan();   /* 检测有多少记录的文件已失效 */
     }catch(err){
       box.innerHTML=`<div class="mg-empty">读取失败:${esc(err&&err.message?err.message:'未知错误')} · 请稍后重试</div>`;
     }finally{
@@ -3004,6 +3021,83 @@ const Admin={
     return this.put('data.json',new Blob([JSON.stringify(this.mgData,null,1)],{type:'application/json'}))
       .then(()=>Bus.emit('archive:reload'))
       .then(()=>{this.renderManage();if(okMsg)this.status(okMsg,'ok')});
+  },
+  /* ─── 清理"记录还在、文件已没了"的残影照片 ───
+     曾经的删除缺陷会让照片从云端删掉、但 data.json 里的记录没同步移除,
+     访客端就会看到破图。这里逐个探测文件是否还存在于云端,把失效记录摘掉。 */
+  orphanScan(){
+    const box=$('#orphanBox'),info=$('#orphanInfo');
+    if(!box||!info)return;
+    const data=this.mgData;
+    if(!data||!data.groups.length){box.hidden=true;return}
+    let total=0;
+    data.groups.forEach(g=>{(g.gs||[]).forEach(p=>{if(p.k)total++})});
+    box.hidden=false;
+    info.innerHTML=`将逐张检查这 <b>${total} 张</b>照片的云端文件是否还在。若发现已被删除却仍留在列表里的,会被清理掉。`;
+    const btn=$('#orphanBtn');
+    if(btn){btn.disabled=false;btn.textContent='检查并清理失效照片'}
+  },
+  async orphanRebuild(){
+    const data=this.mgData;
+    if(!data)return;
+    const btn=$('#orphanBtn');
+    btn.disabled=true;
+    this.status('正在检查云端文件是否都存在 …');
+    /* 1. 收集所有待检查的 key */
+    const targets=[];
+    data.groups.forEach(g=>{(g.gs||[]).forEach((p,i)=>{if(p.k)targets.push({g,p,i})})});
+    if(!targets.length){this.status('没有可检查的照片','ok');btn.disabled=false;return}
+    /* 2. 并发探测(HEAD 请求,只读头部不下载内容) */
+    const missing=[];
+    let done=0;
+    const CONC=6;
+    let cursor=0;
+    const worker=async()=>{
+      while(cursor<targets.length){
+        const t=targets[cursor++];
+        try{
+          const r=await fetch(cosURL(t.p.k),{method:'HEAD',cache:'no-store'});
+          if(r.status===404)missing.push(t);
+        }catch(e){
+          /* 网络错误不当作文件缺失,避免误删记录 */
+        }
+        done++;
+        if(done%5===0||done===targets.length){
+          btn.textContent=`检查中 ${done}/${targets.length} …`;
+        }
+      }
+    };
+    await Promise.all(Array.from({length:CONC},worker));
+    /* 3. 摘掉失效记录 */
+    if(!missing.length){
+      this.status(`检查完成:${targets.length} 张照片的云端文件都在,没有失效记录`,'ok');
+      btn.disabled=false;btn.textContent='重新检查';
+      return;
+    }
+    if(!confirm(`发现 ${missing.length} 张照片的云端文件已不存在,但列表里还留着(访客会看到破图)。\n\n现在把这些失效记录从列表里清理掉吗?\n(只改列表数据,不会删除任何文件)`)) {
+      btn.disabled=false;btn.textContent='重新检查';
+      return;
+    }
+    /* 按组处理:从后往前删,避免索引错位 */
+    const byGroup=new Map();
+    missing.forEach(t=>{
+      if(!byGroup.has(t.g))byGroup.set(t.g,[]);
+      byGroup.get(t.g).push(t.i);
+    });
+    let removed=0;
+    byGroup.forEach((idxs,g)=>{
+      idxs.sort((a,b)=>b-a).forEach(i=>{g.gs.splice(i,1);removed++});
+    });
+    /* 空组一并移除 */
+    data.groups=data.groups.filter(g=>g.gs&&g.gs.length);
+    try{
+      await this.mgSave(`已清理 ${removed} 条失效记录`);
+    }catch(e){
+      this.status('清理失败:'+((e&&e.message)||'请检查网络'),'no');
+    }
+    btn.disabled=false;btn.textContent='重新检查';
+    this.renderManage();
+    this.orphanScan();
   },
   /* ─── 老照片补预览图 ───
      早期上传的照片没有压缩版,访客浏览会下原图(12~20MB)导致卡顿。
