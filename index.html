@@ -509,9 +509,11 @@ html[data-theme="bright"] .cm-list::-webkit-scrollbar-thumb{background:rgba(30,5
   .gp-exif{font-size:10px;padding:10px 14px;margin-top:14px}
 }
 
-/* ═══════ 桌面大屏适配 (电脑端美化与按比例放大) ═══════ */
+/* ═══════ 桌面大屏适配 (电脑端美化与按比例放大) ═══════
+   注意:.group-page 是整页的全宽容器(它内部才用 margin:0 auto 居中内容),
+   绝不能给它加 max-width,否则整块内容会被挤到左侧、看上去"没有居中" */
 @media(min-width:1024px){
-  #archive, .group-page, .gp-hero, .gp-previews, .gp-top {
+  #archive, .gp-hero, .gp-previews, .gp-top {
     max-width: 1400px;
   }
   .archive-head { margin-bottom: 28px; }
@@ -551,7 +553,7 @@ html[data-theme="bright"] .cm-list::-webkit-scrollbar-thumb{background:rgba(30,5
 }
 
 @media(min-width:1440px){
-  #archive, .group-page, .gp-hero, .gp-previews, .gp-top {
+  #archive, .gp-hero, .gp-previews, .gp-top {
     max-width: 1540px;
   }
   .contact-sheet {
