@@ -2910,11 +2910,31 @@ const Admin={
         onProgress:e=>onProg&&onProg(e)},(err,data)=>err?rej(err):res(data));
     });
   },
-  /* 删除云端对象(删除/替换照片时清理旧文件) */
-  del(key){
-    return new Promise((res,rej)=>{
-      this.cos.deleteObject({Bucket:CONFIG.cosBucket,Region:CONFIG.cosRegion,Key:key},err=>err?rej(err):res());
+  /* 删除云端对象:改由后端代删。
+     为什么:浏览器直连 COS 删文件是跨域 DELETE,COS 的 CORS 默认不放行 DELETE,
+     浏览器会直接拦截并报 "CORS blocked or network error"。服务器不受此限制。
+     鉴权沿用上传所用的同一对 COS 密钥,站长无需额外输入任何东西。 */
+  async del(key){
+    const sid=this.getSid(),skey=this.getSkey();
+    if(!sid||!skey){
+      const e=new Error('请先在「站点设置」里保存 COS 密钥');
+      e.needKey=true;
+      throw e;
+    }
+    const keys=Array.isArray(key)?key:[key];
+    const r=await fetch((CONFIG.apiBase||'')+'/api/photo/delete',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sid:sid,skey:skey,keys:keys})
     });
+    let j=null;
+    try{j=await r.json()}catch(e){}
+    if(!r.ok||!j||!j.ok){
+      const err=new Error((j&&j.error)||('删除失败 HTTP '+r.status));
+      if(r.status===403)err.needKey=true;
+      throw err;
+    }
+    return j;
   },
   cosURL(k){return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`},
   /* ─── 已上传照片管理:删除 / 替换单张,改单张介绍 ───
@@ -3066,38 +3086,70 @@ const Admin={
     this.renderManage();
   },
   async mgDelete(d,i){
-    if(!await this.client())return;   /* 删除需密钥:client() 已提示"请先保存密钥" */
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(!g||!g.gs[i]||!g.gs[i].k)return;
     if(!confirm(`确定删除「${g.gs[i].t||d+' 第'+(i+1)+'张'}」?\n云端文件会一并移除,不可恢复。`))return;
     this.status('删除中 …');
+    /* 原图与两张小版本一并删除,避免留下无人引用的孤儿文件 */
+    const p=g.gs[i];
+    const keys=[p.k];
+    if(p.tn){if(p.tn.s)keys.push(p.tn.s);if(p.tn.v)keys.push(p.tn.v)}
     try{
-      await this.del(g.gs[i].k);
-      g.gs.splice(i,1);
-      if(!g.gs.length)this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+      await this.del(keys);
+    }catch(err){
+      this.delFail(err);
+      return;
+    }
+    /* 云端文件已删,接着更新索引。这两步分开处理:
+       若索引写失败,要明确告诉站主"文件已删、只是列表没更新",
+       否则会以为没删掉而重复操作。 */
+    g.gs.splice(i,1);
+    if(!g.gs.length)this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+    try{
       await this.mgSave('已删除');
     }catch(err){
-      this.status('删除失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
+      this.status('照片已从云端删除,但列表更新失败('+((err&&err.message)||'')+')。刷新页面即可看到最新列表。','no');
       this.renderManage();
     }
   },
   async mgDeleteGroup(d){
-    if(!await this.client())return;
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(!g)return;
     if(!confirm(`确定删除整组「${g.title||d}」(${g.gs.length} 张)?\n云端文件会一并移除,不可恢复。`))return;
     this.status('删除整组中 …');
+    /* 一次请求带上全部 key(含小图),后端逐个删除,比逐张请求快很多 */
+    const keys=[];
+    g.gs.forEach(p=>{
+      if(!p.k)return;
+      keys.push(p.k);
+      if(p.tn){if(p.tn.s)keys.push(p.tn.s);if(p.tn.v)keys.push(p.tn.v)}
+    });
     try{
-      for(const p of g.gs){if(p.k){try{await this.del(p.k)}catch(e){}}}
-      this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+      if(keys.length)await this.del(keys);
+    }catch(err){
+      this.delFail(err);
+      return;
+    }
+    this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+    try{
       await this.mgSave('整组已删除');
     }catch(err){
-      this.status('删除失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
+      this.status('整组已从云端删除,但列表更新失败('+((err&&err.message)||'')+')。刷新页面即可看到最新列表。','no');
       this.renderManage();
     }
   },
+  /* 删除失败时的统一提示 */
+  delFail(err){
+    const raw=(err&&err.message)||'';
+    if(err&&err.needKey){
+      this.tab('setup');
+      this.status('删除需要先保存 COS 密钥:请在「站点设置」里填写密钥并保存(与上传照片用的是同一对)。','no');
+    }else{
+      this.status('删除失败:'+(raw||'请检查网络后重试'),'no');
+    }
+    this.renderManage();
+  },
   async mgReplace(d,i,file){
-    if(!await this.client())return;
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(!g||!g.gs[i])return;
     if(!file)return;
@@ -3109,9 +3161,26 @@ const Admin={
       const ex=await this.scanExif([file]);
       await this.put(key,file);
       const old=g.gs[i].k;
+      const oldTn=g.gs[i].tn;
       g.gs[i].k=key;
+      delete g.gs[i].tn;   /* 换了新图,旧小图作废 */
       if(ex&&ex[0])g.gs[i].exif=ex[0];
-      if(old&&old!==key){try{await this.del(old)}catch(e){}}   /* 新文件就位后才删旧文件,失败不阻断 */
+      /* 为新图生成小版本(与上传流程一致,否则这张会回退到加载原图) */
+      try{
+        const small=await Thumb.make(file,Thumb.SMALL,Thumb.Q_SMALL);
+        const sk=Thumb.key(key,Thumb.SMALL);
+        await this.put(sk,small);
+        const view=await Thumb.make(file,Thumb.VIEW,Thumb.Q_VIEW);
+        const vk=Thumb.key(key,Thumb.VIEW);
+        await this.put(vk,view);
+        g.gs[i].tn={s:sk,v:vk};
+      }catch(e){console.warn('替换后生成预览图失败:',e&&e.message)}
+      /* 新图就位后才清理旧文件(含旧小图),失败不阻断 */
+      if(old&&old!==key){
+        const rm=[old];
+        if(oldTn){if(oldTn.s)rm.push(oldTn.s);if(oldTn.v)rm.push(oldTn.v)}
+        try{await this.del(rm)}catch(e){}
+      }
       await this.mgSave('照片已替换');
     }catch(err){
       this.status('替换失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
@@ -3119,7 +3188,7 @@ const Admin={
     }
   },
   async mgDescSave(d,i,val){
-    if(!await this.client())return;
+    /* 只写 data.json(用 COS SDK 的 PUT,CORS 允许),无需口令 */
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(!g||!g.gs[i])return;
     const v=(val||'').trim();

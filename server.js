@@ -78,6 +78,30 @@ function cosPut(key, text) {
   });
 }
 
+/**
+ * 删除 COS 对象。
+ * 为什么删除要由服务器代做:浏览器直连 COS 删文件是跨域 DELETE 请求,
+ * 腾讯云 CORS 需显式放行 DELETE,未放行时浏览器会直接拦截(报 CORS blocked)。
+ * 服务器之间通信不走浏览器 CORS,因此把删除放到后端最稳妥。
+ */
+function cosDelete(key) {
+  return new Promise((resolve, reject) => {
+    if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+      return reject(new Error('COS 密钥未配置(缺少环境变量 COS_SECRET_ID / COS_SECRET_KEY)'));
+    }
+    cos.deleteObject(
+      { Bucket: COS_BUCKET, Region: COS_REGION, Key: key },
+      (err, data) => {
+        // 文件本来就不存在,视为删除成功(幂等)
+        if (err && (err.statusCode === 404 || /NoSuchKey/i.test(err.message || ''))) {
+          return resolve({ alreadyGone: true });
+        }
+        return err ? reject(err) : resolve(data);
+      }
+    );
+  });
+}
+
 /* ─────────── 存储层:配置了 COS 就用 COS,否则退回本地文件(便于本机试用) ─────────── */
 const LOCAL_FILE = path.join(__dirname, 'data', 'interactions.json');
 const useCos = Boolean(COS_SECRET_ID && COS_SECRET_KEY);
@@ -97,6 +121,9 @@ function localPut(text) {
 
 const storageGet = (key) => (useCos ? cosGet(key) : Promise.resolve(localGet()));
 const storagePut = (key, text) => (useCos ? cosPut(key, text) : Promise.resolve(localPut(text)));
+
+/* 本地模式下的"删除":仅做存在性校验(本地只有 interactions.json 一个文件,不涉及图片) */
+const storageDelete = (key) => (useCos ? cosDelete(key) : Promise.resolve({ local: true }));
 
 /* ─────────── 数据层:内存缓存 + 写穿透 ─────────── */
 let store = { photos: {} };
@@ -204,6 +231,14 @@ const clean = (s, max) =>
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .trim()
     .slice(0, max);
+
+/* 定长比较,避免用 === 比较密钥时泄露长度/前缀信息 */
+function safeEqual(a, b) {
+  const x = Buffer.from(String(a), 'utf8');
+  const y = Buffer.from(String(b), 'utf8');
+  if (x.length !== y.length) return false;
+  return crypto.timingSafeEqual(x, y);
+}
 
 const clientIp = (req) =>
   (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
@@ -346,6 +381,59 @@ async function handle(req, res) {
     rec.comments = rec.comments.filter((c) => c && c.id !== id);
     await persist();
     return json(res, 200, { ok: true });
+  }
+
+  /**
+   * 代删云端文件(供站长面板的"删除照片/替换照片/删除整组"使用)。
+   * 鉴权:校验请求里带来的 COS 密钥是否与服务器上的一致 —— 站长在浏览器里
+   * 保存过这对密钥(上传照片时就在用),所以删除时无需任何额外输入。
+   * 为什么由后端删:见 cosDelete 的注释(浏览器跨域 DELETE 会被 COS CORS 拦截)。
+   */
+  if (p === '/api/photo/delete' && req.method === 'POST') {
+    if (!rateLimit(ip, 'photoDel', 120, 60 * 1000))
+      return json(res, 429, { error: '操作太频繁,请稍后再试' });
+
+    const body = await readBody(req);
+
+    /*
+     * 鉴权:沿用上传所用的那对 COS 密钥。
+     * 浏览器里已保存这对密钥(上传照片时就在用),删除时一并发来,
+     * 后端校验它与服务器上的密钥一致即放行 —— 站长无需额外设置或输入任何口令,
+     * 体验与上传完全一致;而外部访客拿不到密钥,也就删不了文件。
+     */
+    const sid = clean(body.sid, 128);
+    const skey = clean(body.skey, 128);
+    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+      return json(res, 403, {
+        error: '密钥校验未通过',
+        hint: '请先在「站点设置」里保存 COS 密钥(与上传照片用的是同一对)。',
+      });
+    }
+
+    // 支持单个或多个 key
+    const keys = (Array.isArray(body.keys) ? body.keys : [body.key])
+      .map((k) => clean(k, 512))
+      .filter(Boolean)
+      .slice(0, 200);
+    if (!keys.length) return json(res, 400, { error: '缺少要删除的文件标识' });
+
+    const results = [];
+    for (const k of keys) {
+      try {
+        await storageDelete(k);
+        results.push({ key: k, ok: true });
+      } catch (e) {
+        console.error('[photo/delete] 失败:', k, e.message);
+        results.push({ key: k, ok: false, error: e.message });
+      }
+    }
+    const failed = results.filter((r) => !r.ok);
+    return json(res, failed.length && failed.length === results.length ? 500 : 200, {
+      ok: failed.length === 0,
+      deleted: results.filter((r) => r.ok).length,
+      failed: failed.length,
+      results,
+    });
   }
 
   if (p === '/' || p === '/index.html') {
