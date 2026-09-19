@@ -1,0 +1,22 @@
+{
+  "name": "phototropic-live",
+  "version": "1.0.0",
+  "description": "Phototropic 摄影归档 · 带点赞与评论的在线站点",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "photography",
+    "gallery",
+    "archive"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^2.14.6"
+  }
+}

@@ -1,0 +1,3156 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="bright">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no,email=no,address=no">
+<meta name="renderer" content="webkit">
+<meta name="theme-color" content="#F3F0E6">
+<title>Phototropic · 照片归档预览</title>
+<!-- 字体走国内镜像 fonts.loli.net(Google Fonts 国内不可达);失败时自动回退系统字体 -->
+<link rel="preconnect" href="https://fonts.loli.net">
+<link rel="preconnect" href="https://gstatic.loli.net" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin>
+<!-- 字体样式非阻塞加载:弱网/微信内不再卡首屏(系统字体先渲染,字体到达后无缝换装) -->
+<link rel="preload" as="style" href="https://fonts.loli.net/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;400;600;900&family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<link href="https://fonts.loli.net/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;400;600;900&family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.loli.net/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;400;600;900&family=Noto+Sans+SC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
+<style>
+/* ═══════ 色板 · 暗房显影(曜石黑基底 + 光谱强调) ═══════ */
+:root{
+  --coral:#FF5E5B;--apricot:#FFA94D;--sun:#FFD166;--mint:#06D6A0;
+  --text:#FDFCFA;--text-dim:rgba(253,252,250,.62);--text-faint:rgba(253,252,250,.36);
+  --border:rgba(255,255,255,.12);
+  --bg:#08070B;--panel:rgba(18,16,24,.65);
+  --serif:'Noto Serif SC','Source Han Serif SC','Songti SC','SimSun',serif;
+  --latin:'Cormorant Garamond','Instrument Serif',Georgia,'Times New Roman',serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Noto Sans SC','PingFang SC','HarmonyOS Sans SC','MiSans','HONOR Sans CN','Microsoft YaHei',sans-serif;
+  --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Courier New',monospace;
+  --ease:cubic-bezier(.34,1.2,.4,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:var(--sans);color:var(--text);background:var(--bg);overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-feature-settings:"tnum" 1}
+::selection{background:var(--coral);color:#fff}
+button{font-family:inherit;border:none;cursor:pointer;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--sun);outline-offset:2px}   /* 键盘焦点可见(旧内核自动忽略) */
+button,.proof,.gp-preview-item,.gp-back,.admin-btn,.lb-close{touch-action:manipulation}  /* 去除移动端点击延迟 */
+img{-webkit-user-select:none;user-select:none}
+
+/* ═══════ 背景氛围 ═══════ */
+.bg-glow{position:fixed;top:0;left:0;right:0;bottom:0;z-index:-2;pointer-events:none;overflow:hidden}
+.bg-glow::before{content:'';position:absolute;inset:0}
+.blob{position:absolute;border-radius:50%}   /* 径向渐变边缘已透明,无需 filter:blur,省掉 6 层大半径 GPU 模糊 */
+.blob.b1,.blob.b2,.blob.b5{will-change:transform}   /* 仅 3 个动画光斑升为合成层,静态的常年不升层、不占显存 */
+.blob.b1{width:50vmax;height:50vmax;left:-14vmax;top:-16vmax;animation:d1 30s ease-in-out infinite alternate}
+.blob.b2{width:44vmax;height:44vmax;right:-12vmax;top:20vh;animation:d2 36s ease-in-out infinite alternate}
+.blob.b3{width:38vmax;height:38vmax;left:26vmax;bottom:-18vh}
+.blob.b4{width:34vmax;height:34vmax;left:-8vmax;bottom:-8vh}
+.blob.b5{width:28vmax;height:28vmax;right:-6vmax;bottom:8vh;animation:d3 40s ease-in-out infinite alternate-reverse}
+.blob.b6{width:40vmax;height:40vmax;left:44vmax;top:-16vmax}
+@keyframes d1{to{transform:translate3d(8vw,6vh,0) scale(1.08)}}
+@keyframes d2{to{transform:translate3d(-6vw,-8vh,0) scale(.94)}}
+@keyframes d3{to{transform:translate3d(-9vw,-5vh,0) scale(1.12)}}
+/* 全屏噪点:去掉 mix-blend-mode(混合模式会迫使每帧与下方内容重新融合,滚动即掉帧),
+   改为普通半透明纹理,质感保留、零每帧开销 */
+.grain{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ═══════ 玻璃材质 · 高透光学镀膜 ═══════ */
+.glass{
+  position:relative;
+  background:linear-gradient(rgba(18,16,24,.72),rgba(18,16,24,.55));
+  backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  border:1px solid var(--border);
+  box-shadow:0 24px 60px -18px rgba(4,3,8,.62),inset 0 1px 0 rgba(255,255,255,.16);
+}
+.glass::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.5),transparent 30%,transparent 50%,rgba(255,255,255,.18));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+
+
+/* ═══════ 顶部栏 ═══════ */
+.topbar{position:fixed;top:16px;top:calc(16px + constant(safe-area-inset-top));top:calc(16px + env(safe-area-inset-top));left:16px;right:16px;z-index:800;display:flex;align-items:center;gap:12px;padding:8px 18px;border-radius:999px}
+.brand{font-family:var(--latin);font-style:italic;font-size:19px;letter-spacing:.02em;cursor:pointer;white-space:nowrap;
+  background:linear-gradient(120deg,var(--coral),var(--apricot),var(--sun));-webkit-background-clip:text;background-clip:text;color:transparent}
+.bar-spacer{flex:1}
+.bar-stat{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--text-faint);white-space:nowrap}
+/* 明暗主题切换·高级感月相滑块(左太阳·右月亮,滑块缓缓滑向当前模式) */
+.theme-btn{position:relative;flex:none;display:flex;align-items:center;gap:0;padding:3px;border-radius:999px;
+  border:1px solid var(--border);background:rgba(255,255,255,.06);
+  transition:border-color .4s,background .4s,box-shadow .4s}
+.theme-btn:hover{box-shadow:0 0 18px -6px rgba(255,150,90,.55)}
+.tb-thumb{position:absolute;top:3px;left:3px;width:30px;height:30px;border-radius:50%;
+  background:linear-gradient(135deg,#FFC25E,#FF6B6B);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 5px 14px -4px rgba(255,107,99,.55);
+  transition:transform .6s cubic-bezier(.4,1.6,.5,1);pointer-events:none}
+.tb-icon{position:relative;z-index:1;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);transition:color .4s}
+.tb-icon svg{display:block;transition:transform .6s cubic-bezier(.4,1.6,.5,1),opacity .35s;fill:none;stroke:currentColor}
+/* 亮色档:滑块停在太阳侧,太阳点亮(白形压在琥珀圆点上),月亮隐退 */
+html[data-theme="bright"] .theme-btn{background:rgba(255,255,255,.72);border-color:rgba(30,59,52,.18)}
+html[data-theme="bright"] .tb-thumb{transform:translateX(0)}
+html[data-theme="bright"] .tb-icon[data-role="sun"]{color:#fff;filter:drop-shadow(0 1px 2px rgba(150,60,20,.45))}
+html[data-theme="bright"] .tb-icon[data-role="moon"]{color:rgba(30,59,52,.30)}
+html[data-theme="bright"] .tb-icon[data-role="moon"] svg{transform:translateY(3px) scale(.86);opacity:.6}
+/* 暗色档:滑块滑到右侧月亮,月亮点亮,太阳隐退 */
+html[data-theme="dark"] .tb-thumb{transform:translateX(32px)}
+html[data-theme="dark"] .tb-icon[data-role="moon"]{color:#fff;filter:drop-shadow(0 1px 2px rgba(60,30,10,.5))}
+html[data-theme="dark"] .tb-icon[data-role="sun"]{color:rgba(237,247,241,.3)}
+html[data-theme="dark"] .tb-icon[data-role="sun"] svg{transform:translateY(3px) scale(.86);opacity:.6}
+
+/* ═══════ 主题切换(单层圆形遮罩,见 .tt-veil + JS) ═══════ */
+/* 微信/QQ等内置浏览器切主题时临时关闭逐元素过渡,避免毛玻璃逐帧重绘造成掉帧 */
+html.no-fx,html.no-fx *{transition:none!important;animation:none!important}
+
+/* ═══════ lite 轻量渲染路径(一切触屏/小屏设备,含微信) ═══════
+   手机上真正吃帧的不是单个特效,而是叠加的"每帧全屏工作":
+   ① 光斑动画(30~40s 循环)让固定背景层每帧都在变 → 整屏逐帧重新合成;
+   ② 噪点层盖在内容之上(z-9990) → 每帧一次全屏混合;
+   ③ backdrop-filter 毛玻璃 → 内容从其下方滚过时逐帧重算模糊。
+   lite 里三项全部关闭:背景变成"画一次就不动"的静态层,滚动只剩内容瓦片,
+   这是网页滚动所能达到的最小开销;桌面(鼠标+大屏)保留全套特效 */
+html.lite .grain{display:none!important}
+html.lite{scroll-behavior:auto;-webkit-overflow-scrolling:touch}
+html.lite .bg-glow{display:none!important}  /* 手机端完全冻结后台光斑层,省掉整屏重绘开销 */
+html.lite .blob{animation:none!important;will-change:auto}
+html.lite *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html.lite[data-theme="dark"] .glass{background:linear-gradient(rgba(14,12,20,.96),rgba(10,8,16,.94));box-shadow:0 12px 36px -12px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.10)}
+html.lite[data-theme="bright"] .glass{background:linear-gradient(rgba(255,255,255,.98),rgba(247,245,238,.96));box-shadow:0 12px 36px -16px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,1)}
+html.lite .gp-back,html.lite .proof .pf-num,html.lite .gp-num{background:rgba(10,12,15,.94)}
+html.lite .admin-mask{background:rgba(4,6,8,.97)}
+/* 手机端启用 GPU 独立图层隔离 */
+html.lite #archive,html.lite .group-page,html.lite .contact-sheet{transform:translateZ(0);contain:content}
+/* 展开/收起的高度过渡(grid-template-rows)是逐帧布局动画,手机上瞬时展开点开即得 */
+html.lite .year-body,html.lite .month-body,html.lite .day-body{transition:none}
+/* 逐项错峰入场动画在手机上会同时制造一串动画层,改由容器统一一次淡入 */
+html.lite .gp-preview-item,html.lite .proof{animation:none!important;transition:none!important;transform:none!important}
+@media(prefers-reduced-motion:reduce){
+  .year-body,.month-body,.day-body{transition:none}}
+/* 单层圆形主题遮罩:只在它身上做 transform:scale(扩张) 与 opacity(淡入淡出),
+   二者走 GPU 合成(不碰主线程重绘);遮罩盖满屏幕后在其背后瞬时换肤,
+   昂贵的全屏渐变/毛玻璃重绘被不透明遮罩挡住,肉眼看不到掉帧,天然又流畅又不卡 */
+.tt-veil{position:fixed;z-index:9890;pointer-events:none;border-radius:50%;
+  opacity:0;transform:translate(-50%,-50%) scale(0);
+  will-change:transform,opacity}
+
+/* ═══════ 归档(顶部 88px:避开 fixed 玻璃顶栏,防止展开/收起按钮被遮挡) ═══════ */
+#archive{max-width:1200px;margin:0 auto;padding:88px 24px 120px}
+.archive-head{display:flex;align-items:center;margin-bottom:22px;flex-wrap:wrap}
+.archive-tools{margin-left:auto;display:flex;gap:8px}
+
+/* ═══════ 背景音乐 · 黑胶唱片(访客默认静音,点击播放) ═══════ */
+@keyframes disc-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.disc{position:fixed;right:18px;bottom:22px;z-index:700;width:54px;height:54px;border-radius:50%;cursor:pointer;
+  border:1px solid rgba(255,255,255,.16);box-shadow:0 8px 28px -6px rgba(0,0,0,.75),inset 0 0 12px rgba(0,0,0,.6);
+  background:repeating-radial-gradient(circle at 50% 50%,#131019 0 2px,#1c1826 2px 4px);
+  animation:disc-spin 6s linear infinite;animation-play-state:paused;
+  transition:transform .3s,box-shadow .3s}
+.disc:hover{transform:scale(1.07);box-shadow:0 10px 34px -6px rgba(255,94,91,.35),inset 0 0 12px rgba(0,0,0,.6)}
+.disc.playing{animation-play-state:running}
+.disc::before{   /* 中心珊瑚色盘标 */
+  content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;
+  background:var(--coral);box-shadow:0 0 14px -2px rgba(255,94,91,.65)}
+.disc::after{    /* 暂停态:播放三角(纯 CSS 三角,旧内核兼容) */
+  content:'';position:absolute;left:50%;top:50%;margin:-5px 0 0 -3px;
+  border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid #fff;transition:opacity .25s}
+.disc.playing::after{   /* 播放态:双竖条(3px 白条 + box-shadow 复制第二条) */
+  border:none;width:3px;height:11px;margin:-5.5px 0 0 -7px;background:#fff;box-shadow:7px 0 0 #fff}
+.disc-tip{position:fixed;right:18px;bottom:86px;z-index:700;max-width:72vw;
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;line-height:1.7;color:var(--text);
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:7px 12px;
+  opacity:0;transform:translateY(6px);transition:opacity .35s,transform .35s;pointer-events:none}
+.disc-tip.show{opacity:1;transform:none}
+.tool-btn{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--text-dim);padding:6px 14px;border:1px solid var(--border);border-radius:999px;transition:.3s}
+.tool-btn:hover{color:var(--text);border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.06)}
+
+/* ── 三级折叠:年 → 月 → 日 ── */
+.year{margin-bottom:18px}
+.year-head{display:flex;align-items:center;gap:14px;width:100%;padding:14px 0;cursor:pointer;text-align:left;transition:color .3s}
+.year-head:hover{color:var(--apricot)}
+.year-head .chev{width:18px;height:18px;flex:none;transition:transform .4s var(--ease)}
+.year-head .chev path{fill:none;stroke:currentColor;stroke-width:2}
+.year.open .year-head .chev{transform:rotate(90deg)}
+.year-head .y{font-family:var(--mono);font-size:26px;font-weight:500;letter-spacing:.08em}
+.year-head .yc{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--text-faint)}
+.year-head .rule{flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.18),transparent)}
+.year-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .45s ease}
+.year.open .year-body{grid-template-rows:1fr}
+.year-inner{overflow:hidden;min-height:0}
+
+.month{margin:0 0 10px 28px}
+.month-head{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;cursor:pointer;text-align:left;border-radius:12px;transition:background .3s}
+.month-head:hover{background:rgba(255,255,255,.05)}
+.month-head .chev{width:14px;height:14px;flex:none;transition:transform .4s var(--ease)}
+.month-head .chev path{fill:none;stroke:var(--text-dim);stroke-width:2}
+.month.open .month-head .chev{transform:rotate(90deg)}
+.month-head .m{font-family:var(--mono);font-size:15px;font-weight:500;letter-spacing:.1em}
+.month-head .mc{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--text-faint)}
+.month-head .note{font-family:var(--serif);font-size:13px;font-weight:600;color:var(--text-dim);letter-spacing:.12em}
+.month-head .rule{flex:1;height:1px;background:rgba(255,255,255,.08)}
+.month-head .hint{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.14em;color:var(--text-dim)}
+.month-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .4s ease}
+.month.open .month-body{grid-template-rows:1fr}
+.month-inner{overflow:hidden;min-height:0;padding:4px 0}
+
+/* 日组行 */
+.day{margin:0 0 8px 26px}
+.day-head{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;cursor:pointer;text-align:left;border-radius:10px;transition:background .3s}
+.day-head:hover{background:rgba(255,255,255,.05)}
+.day-head .chev{width:12px;height:12px;flex:none;transition:transform .4s var(--ease)}
+.day-head .chev path{fill:none;stroke:var(--text-dim);stroke-width:2}
+.day.open .day-head .chev{transform:rotate(90deg)}
+.day-head .d{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.08em}
+.day-head .d-cn{font-family:var(--serif);font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:.1em}
+.day-head .dc{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--text-faint)}
+.day-head .loc{font-family:var(--sans);font-size:11px;font-weight:300;color:var(--text-dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw;flex-shrink:1}
+.day-head .rule{flex:1;height:1px;background:rgba(255,255,255,.06)}
+.day-head .hint{font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.12em;color:var(--text-dim)}
+.day-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s ease}
+.day.open .day-body{grid-template-rows:1fr}
+.day-inner{overflow:hidden;min-height:0}
+
+/* ═══════ 印样小图(contact sheet) ═══════ */
+.contact-sheet{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;grid-gap:8px;   /* grid-gap:Chrome 57-65 老内核 */
+  padding:10px 12px 14px;
+}
+.proof{
+  position:relative;border-radius:9px;overflow:hidden;cursor:pointer;
+  border:1px solid rgba(255,255,255,.1);
+  background:linear-gradient(135deg,#15121d,#0f0d15);
+  padding-top:125%;   /* 4:5 纵横比,兼容写法(aspect-ratio 需 Chrome 88+) */
+  transition:transform .35s var(--ease),box-shadow .35s,border-color .35s;
+  animation:proofIn .5s both;
+}
+.proof:nth-child(n){animation-delay:calc(var(--i,0) * 50ms)}
+@keyframes proofIn{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.proof:hover{transform:translateY(-3px) scale(1.03);border-color:rgba(255,209,102,.35);
+  box-shadow:0 14px 34px -10px rgba(0,0,0,.6),0 0 24px -6px rgba(255,209,102,.28)}
+.proof img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transition:opacity .4s,transform .5s;opacity:0}
+.proof img.loaded{opacity:1}
+.proof:hover img.loaded{transform:scale(1.07)}
+.proof .pf-num{position:absolute;top:5px;left:5px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.55);background:rgba(0,0,0,.4);padding:2px 5px;border-radius:4px;backdrop-filter:blur(4px)}
+.day-collapsed{padding:6px 4px 10px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--text-faint)}
+
+/* ═══════ 组详情子页面 ═══════ */
+.group-page{min-height:100vh;padding:80px 0 60px;padding-top:calc(80px + constant(safe-area-inset-top));padding-top:calc(80px + env(safe-area-inset-top));padding-bottom:calc(60px + constant(safe-area-inset-bottom));padding-bottom:calc(60px + env(safe-area-inset-bottom));animation:gpFade .5s both}
+@keyframes gpFade{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+/* 随内容滚动、吸附在固定顶栏下方跟随(此时返回按钮下的内容会从它身后滚过) */
+.gp-top{position:sticky;top:calc(88px + constant(safe-area-inset-top));top:calc(88px + env(safe-area-inset-top));z-index:600;max-width:1200px;margin:0 auto;padding-top:14px;display:flex;align-items:center}
+.gp-back{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  color:var(--text-dim);background:rgba(13,11,18,.7);backdrop-filter:blur(12px);
+  border:1px solid var(--border);transition:.3s}
+.gp-back:hover{color:var(--text);border-color:rgba(255,255,255,.3);background:rgba(13,11,18,.9)}
+.gp-hero{max-width:1200px;margin:0 auto;padding:40px 24px 20px;text-align:center}
+.gp-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.2em;
+  color:var(--sun);background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.26);padding:5px 14px;border-radius:999px}
+.gp-chip .dot{width:4px;height:4px;border-radius:50%;background:var(--coral);box-shadow:0 0 6px var(--coral)}
+.gp-title{font-family:var(--serif);font-weight:900;font-size:36px;font-size:clamp(28px,5vw,48px);letter-spacing:.04em;margin-top:16px;
+  background:linear-gradient(120deg,var(--coral),var(--apricot),var(--sun));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.gp-loc{font-family:var(--sans);font-size:14px;font-weight:300;color:var(--text-dim);margin-top:8px;letter-spacing:.08em}
+
+/* 预览图区 */
+.gp-previews{max-width:1200px;margin:30px auto 0;padding:0 24px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;grid-gap:12px}
+.gp-preview-item{
+  position:relative;border-radius:14px;overflow:hidden;cursor:pointer;
+  border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(145deg,rgba(24,20,32,.9),rgba(14,12,20,.95));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 12px 32px -8px rgba(0,0,0,.6);
+  padding:8px 8px 10px;
+  transition:transform .35s var(--ease),box-shadow .35s,border-color .35s;
+  animation:gpItemIn .6s both;
+}
+.gp-preview-item:nth-child(n){animation-delay:calc(var(--i,0) * 60ms)}
+@keyframes gpItemIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.gp-preview-item:hover{transform:translateY(-4px);border-color:rgba(255,209,102,.45);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 24px 50px -12px rgba(0,0,0,.75),0 0 24px -6px rgba(255,209,102,.25)}
+.gp-thumb{position:relative;border-radius:10px;overflow:hidden;padding-top:112%;  /* 4:5 内缩略图,兼容写法 */
+  background:#0f0d15}
+.gp-thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transition:transform .6s,opacity .4s;opacity:0}
+.gp-thumb img.loaded{opacity:1}
+.gp-preview-item:hover .gp-thumb img.loaded{transform:scale(1.05)}
+/* 每张图片下方的相机参数小卡(机身型号 + 参数) */
+.gp-exif-cap{display:flex;flex-direction:column;gap:4px;margin-top:10px;padding:9px 12px;border-radius:10px;
+  font-family:var(--mono);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  min-height:0;word-break:break-all;transition:border-color .3s,background .3s}
+.gp-preview-item:hover .gp-exif-cap{border-color:rgba(255,209,102,.3);background:rgba(255,209,102,.04)}
+.gp-ph{font-size:10.5px;font-weight:600;color:var(--text);letter-spacing:.03em;line-height:1.5}
+.gp-pb{font-size:10px;color:var(--sun);line-height:1.5;font-weight:400;letter-spacing:.02em}
+.gp-noex{display:block;margin-top:10px;padding:8px 12px;border-radius:10px;font-family:var(--mono);font-size:9.5px;
+  color:var(--text-faint);border:1px dashed rgba(255,255,255,.12);text-align:center}
+.gp-num{position:absolute;top:14px;left:14px;z-index:2;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  color:rgba(255,255,255,.92);background:rgba(0,0,0,.5);padding:3px 8px;border-radius:6px;backdrop-filter:blur(6px)}
+.gp-exif{font-family:var(--mono);font-size:11px;color:var(--sun);line-height:2;margin-top:20px;
+  background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.22);padding:14px 18px;border-radius:12px}
+
+/* ═══════ 单图悬浮窗 ═══════ */
+.lightbox{position:fixed;top:0;left:0;right:0;bottom:0;z-index:3000;display:none;opacity:0;transition:opacity .3s}
+.lightbox.open{display:flex;opacity:1;align-items:center;justify-content:center;
+  background:rgba(5,4,10,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.lb-inner{display:flex;gap:0;border-radius:20px;overflow:hidden;max-width:1100px;width:92vw;max-height:88vh;position:relative;
+  box-shadow:0 50px 100px -20px rgba(0,0,0,.7)}
+.lb-stage{flex:1;min-width:0;position:relative;display:flex;align-items:center;justify-content:center;
+  background:#050409;min-height:300px;touch-action:none}   /* touch-action:none:缩放手势归 JS 接管 */
+.lb-img{max-width:100%;max-height:88vh;object-fit:contain;transition:opacity .3s;will-change:transform}
+.lb-stage .nav-btn{position:absolute;top:50%;transform:translateY(-50%);width:42px;height:42px;border-radius:50%;
+  background:rgba(10,8,16,.5);border:1px solid rgba(255,255,255,.22);color:var(--text);font-size:15px;z-index:2;
+  display:flex;align-items:center;justify-content:center;transition:.3s;backdrop-filter:blur(6px);
+  box-shadow:0 2px 14px rgba(0,0,0,.35)}
+.lb-stage .nav-btn:hover{background:linear-gradient(135deg,var(--coral),var(--apricot));border-color:transparent;box-shadow:0 0 28px -6px rgba(255,107,94,.4)}
+.lb-stage .nav-prev{left:16px}.lb-stage .nav-next{right:16px}
+/* 原图就绪角标:预览先出、原图后台预载,替换完成后长按/另存到的就是原图 */
+.lb-quality{position:absolute;left:14px;bottom:12px;z-index:3;pointer-events:none;max-width:72%;
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:5px 11px;border-radius:999px;
+  color:rgba(253,252,250,.85);background:rgba(8,6,14,.62);border:1px solid rgba(255,255,255,.18);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-quality.load{color:#FFD166;animation:savePulse 1.5s ease-in-out infinite}
+.lb-quality.ready{color:#06D6A0;border-color:rgba(6,214,160,.45)}
+.lb-quality.fail{color:#FFA94D;border-color:rgba(255,169,77,.45)}
+.lb-quality::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:currentColor;box-shadow:0 0 8px currentColor;margin-right:8px;vertical-align:1px}
+.lb-close{position:absolute;top:12px;right:12px;z-index:6;width:38px;height:38px;border-radius:50%;
+  background:rgba(0,0,0,.45);border:1px solid var(--border);color:var(--text);font-size:13px;
+  display:flex;align-items:center;justify-content:center;transition:.3s;backdrop-filter:blur(8px)}
+.lb-close:hover{background:var(--coral);transform:rotate(90deg)}
+
+/* 悬浮窗右侧栏 · Bento 参数卡(约 30% 视口) */
+.lb-sidebar{width:min(340px,31vw);flex:none;display:flex;flex-direction:column;overflow-y:auto;
+  padding:24px 22px;background:linear-gradient(180deg,rgba(18,16,24,.94),rgba(11,9,16,.96));
+  border-left:1px solid var(--border)}
+.lb-sidebar::-webkit-scrollbar{width:4px}
+.lb-sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:999px}
+.lb-meta{margin-bottom:16px}
+.lb-title{font-family:var(--serif);font-weight:900;font-size:18px;letter-spacing:.03em;color:var(--text)}
+.lb-group{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--text-dim);margin-top:6px}
+.lb-idx{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--text-dim);margin-top:4px}
+.lb-exif{font-family:var(--mono);font-size:10px;color:var(--sun);line-height:1.9;
+  background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.22);padding:12px 13px;border-radius:12px}
+/* EXIF 参数矩阵:机身/镜头为头行,焦距·光圈·快门·感光度为仪表盘单元格 */
+.exm-head{font-size:9.5px;letter-spacing:.06em;color:var(--text-dim);line-height:1.8}
+.exm-grid{display:flex;flex-wrap:wrap;margin-top:4px}
+.exm-cell{width:50%;min-width:0;padding:8px 0 2px;border-top:1px dashed rgba(255,255,255,.08)}
+.exm-cell:nth-child(odd){padding-right:10px}
+.exm-cell:nth-child(even){padding-left:12px;border-left:1px dashed rgba(255,255,255,.08)}
+.exm-l{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.22em;color:var(--text-faint)}
+.exm-v{display:block;font-family:var(--mono);font-size:12.5px;color:var(--sun);margin-top:3px;letter-spacing:.02em}
+.exm-note{margin-top:9px;padding-top:7px;border-top:1px dashed rgba(255,255,255,.08);
+  font-size:9px;color:var(--text-faint);letter-spacing:.05em;line-height:1.7}
+.lb-caption{font-size:12px;font-weight:300;line-height:1.9;color:var(--text-dim);margin-top:14px;letter-spacing:.02em}
+.lb-divider{margin:16px 0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent)}
+.lb-actions{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.lb-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;transition:.3s;cursor:pointer;border:1px solid var(--border);
+  background:rgba(255,255,255,.06);color:var(--text)}
+.lb-btn:hover{background:rgba(255,255,255,.1)}
+.lb-btn-primary{background:linear-gradient(135deg,var(--coral),var(--apricot));border-color:transparent;color:#fff;
+  box-shadow:0 0 24px -6px rgba(255,94,91,.4)}
+.lb-btn-primary:hover{box-shadow:0 0 32px -4px rgba(255,94,91,.55);transform:translateY(-1px)}
+.lb-btn.busy{opacity:.7;pointer-events:none}
+.lb-btn.busy svg{animation:lbSpin 1s linear infinite}
+@keyframes lbSpin{to{transform:rotate(360deg)}}
+
+/* ═══════ 互动区 · 点赞与评论(悬浮窗右栏底部) ═══════ */
+.social{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.sc-bar{display:flex;align-items:center;gap:10px}
+
+/* 点赞按钮:心形 + 计数,已赞时点亮为珊瑚色 */
+.like-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 15px 8px 13px;border-radius:999px;
+  border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text-dim);
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;cursor:pointer;
+  transition:color .3s,border-color .3s,background .3s,transform .2s}
+.like-btn:hover{color:var(--coral);border-color:rgba(255,94,91,.45);background:rgba(255,94,91,.08)}
+.like-btn:active{transform:scale(.94)}
+.like-btn svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;
+  transition:fill .3s,transform .35s var(--ease)}
+.like-btn.on{color:var(--coral);border-color:rgba(255,94,91,.5);background:rgba(255,94,91,.1)}
+.like-btn.on svg{fill:currentColor}
+@keyframes likePop{0%{transform:scale(1)}45%{transform:scale(1.32)}100%{transform:scale(1)}}
+.like-btn.pop svg{animation:likePop .42s var(--ease)}
+/* 谁赞了:小头像叠排 */
+.like-faces{display:flex;align-items:center;flex:1;min-width:0}
+.like-faces .lf{width:22px;height:22px;border-radius:50%;overflow:hidden;flex:none;margin-left:-7px;
+  border:1.5px solid var(--panel);background:#1a1722;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.like-faces .lf:first-child{margin-left:0}
+.like-faces .lf svg{display:block;width:100%;height:100%}
+.like-faces .lf-more{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);margin-left:6px;white-space:nowrap}
+
+/* 评论区 */
+.cm-head{display:flex;align-items:center;margin:16px 0 10px}
+.cm-title{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--text-faint)}
+.cm-count{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-faint)}
+.cm-list{display:flex;flex-direction:column;gap:12px;max-height:230px;overflow-y:auto;padding-right:2px}
+.cm-list::-webkit-scrollbar{width:3px}
+.cm-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:999px}
+.cm-empty{font-size:11.5px;color:var(--text-faint);line-height:1.9;padding:6px 0 2px}
+.cm-item{display:flex;gap:9px;animation:cmIn .34s var(--ease) both}
+@keyframes cmIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.cm-av{width:28px;height:28px;border-radius:50%;overflow:hidden;flex:none;background:#1a1722;
+  border:1px solid var(--border)}
+.cm-av svg{display:block;width:100%;height:100%}
+.cm-body{flex:1;min-width:0}
+.cm-top{display:flex;align-items:baseline;gap:8px}
+.cm-name{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);letter-spacing:.04em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+.cm-time{font-family:var(--mono);font-size:9px;color:var(--text-faint);flex:none}
+.cm-text{font-size:12px;line-height:1.75;color:var(--text);margin-top:3px;
+  word-break:break-word;white-space:pre-wrap}
+.cm-del{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--text-faint);
+  cursor:pointer;padding:1px 5px;border-radius:5px;transition:.25s;flex:none}
+.cm-del:hover{color:var(--coral);background:rgba(255,94,91,.12)}
+
+/* 评论输入 */
+.cm-form{margin-top:12px}
+.cm-form-row{display:flex;gap:8px;align-items:flex-start}
+.cm-input{flex:1;min-width:0;resize:none;font-family:inherit;font-size:12px;line-height:1.7;
+  padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.05);
+  color:var(--text);outline:none;transition:border-color .3s,background .3s;min-height:42px;max-height:110px}
+.cm-input::placeholder{color:var(--text-faint)}
+.cm-input:focus{border-color:rgba(255,209,102,.45);background:rgba(255,255,255,.08)}
+.cm-send{flex:none;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--coral),var(--apricot));border:none;color:#fff;cursor:pointer;
+  transition:transform .2s,box-shadow .3s,opacity .3s;box-shadow:0 4px 14px -4px rgba(255,94,91,.5)}
+.cm-send:hover{transform:translateY(-1px);box-shadow:0 7px 20px -4px rgba(255,94,91,.6)}
+.cm-send:active{transform:scale(.94)}
+.cm-send:disabled{opacity:.45;cursor:default;transform:none;box-shadow:none}
+.cm-send svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9}
+.cm-hint{font-size:10.5px;color:var(--text-faint);margin-top:7px;min-height:14px}
+.cm-hint.err{color:var(--coral)}
+
+/* 访客身份条:头像 + 名字(点击可改) */
+.me-bar{display:flex;align-items:center;gap:9px;margin-top:11px;padding:8px 10px;border-radius:10px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border)}
+.me-bar .cm-av{width:26px;height:26px}
+.me-name{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me-edit{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);cursor:pointer;padding:3px 8px;
+  border-radius:6px;border:1px solid var(--border);transition:.25s;flex:none}
+.me-edit:hover{color:var(--sun);border-color:rgba(255,209,102,.4)}
+
+/* 身份编辑面板(改名字 + 选头像) */
+.me-panel{margin-top:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);
+  border:1px solid var(--border);animation:cmIn .3s var(--ease) both}
+.me-panel-t{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--text-faint);margin-bottom:9px}
+.me-input{width:100%;font-family:inherit;font-size:12.5px;padding:9px 11px;border-radius:9px;
+  border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);outline:none;transition:border-color .3s}
+.me-input:focus{border-color:rgba(255,209,102,.45)}
+.av-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:11px 0}
+.av-opt{position:relative;aspect-ratio:1;border-radius:50%;overflow:hidden;cursor:pointer;
+  border:2px solid transparent;transition:transform .25s var(--ease),border-color .25s;background:#1a1722}
+.av-opt:hover{transform:scale(1.09)}
+.av-opt svg{display:block;width:100%;height:100%}
+.av-opt.sel{border-color:var(--sun);box-shadow:0 0 0 2px rgba(255,209,102,.22)}
+.me-actions{display:flex;gap:8px;margin-top:3px}
+.me-btn{flex:1;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;padding:8px 10px;border-radius:9px;
+  cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);
+  transition:.25s;text-align:center}
+.me-btn:hover{background:rgba(255,255,255,.12)}
+.me-btn.save{background:linear-gradient(135deg,var(--coral),var(--apricot));border-color:transparent;color:#fff}
+.me-btn.save:hover{box-shadow:0 6px 18px -5px rgba(255,94,91,.55)}
+
+/* 亮色主题适配 */
+html[data-theme="bright"] .like-faces .lf{border-color:#fff}
+html[data-theme="bright"] .like-btn{background:rgba(0,0,0,.03);border-color:rgba(30,59,52,.16)}
+html[data-theme="bright"] .like-btn.on{background:rgba(255,94,91,.09);border-color:rgba(255,94,91,.4)}
+html[data-theme="bright"] .cm-input{background:#fff;border-color:rgba(30,59,52,.16)}
+html[data-theme="bright"] .cm-input:focus{background:#fff;border-color:rgba(217,142,43,.5)}
+html[data-theme="bright"] .me-bar,
+html[data-theme="bright"] .me-panel{background:rgba(0,0,0,.025);border-color:rgba(30,59,52,.14)}
+html[data-theme="bright"] .me-input{background:#fff;border-color:rgba(30,59,52,.16)}
+html[data-theme="bright"] .me-btn{background:rgba(0,0,0,.04);border-color:rgba(30,59,52,.14)}
+html[data-theme="bright"] .me-btn:hover{background:rgba(0,0,0,.08)}
+html[data-theme="bright"] .me-btn.save{background:linear-gradient(135deg,var(--teal),var(--leaf));border-color:transparent;color:#fff}
+html[data-theme="bright"] .cm-av,html[data-theme="bright"] .av-opt{background:#EDF3EC;border-color:rgba(30,59,52,.14)}
+html[data-theme="bright"] .social{border-top-color:rgba(30,59,52,.14)}
+html[data-theme="bright"] .cm-list::-webkit-scrollbar-thumb{background:rgba(30,59,52,.2)}
+
+/* 手机端:互动区与右栏一体化,列表不给固定高度(让整栏滚动) */
+@media(max-width:860px){
+  .cm-list{max-height:none}
+  .social{margin-top:14px;padding-top:13px}
+  .av-grid{grid-template-columns:repeat(6,1fr);gap:6px}
+  .like-btn{font-size:10.5px;padding:7px 13px 7px 11px}
+}
+
+/* 悬浮窗手机端 */
+@media(max-width:860px){
+  .lb-inner{flex-direction:column;max-height:92vh;width:94vw}
+  .lb-stage{min-height:0;flex:0 0 auto}
+  .lb-img{max-height:42vh}
+  .lb-stage .nav-btn{width:32px;height:32px;font-size:11px}
+  .lb-stage .nav-prev{left:10px}.lb-stage .nav-next{right:10px}
+  .lb-quality{left:10px;bottom:8px;font-size:9px;padding:4px 9px;max-width:78%}
+  .lb-sidebar{width:100%;flex:1;min-height:0;padding:16px 16px;border-left:none;border-top:1px solid var(--border)}
+  .lb-title{font-size:16px}
+  .lb-caption{font-size:11px;line-height:1.8}
+  .lb-exif{font-size:9px;padding:9px 10px}
+  .exm-v{font-size:11px}
+  .exm-cell:nth-child(even){padding-left:10px}
+  .lb-close{top:10px;right:10px;width:32px;height:32px;font-size:11px}
+}
+
+/* 组详情页手机端 */
+@media(max-width:760px){
+  .gp-top{padding-top:10px;padding-left:16px;padding-right:16px}
+  .gp-back{font-size:10px;padding:6px 12px}
+  .gp-hero{padding:30px 20px 10px}
+  .gp-title{font-size:32px}
+  .gp-loc{font-size:13px}
+  .gp-previews{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;grid-gap:9px;padding:0 16px}
+  .gp-exif{font-size:10px;padding:10px 14px;margin-top:14px}
+}
+
+/* ═══════ 桌面大屏适配 (电脑端美化与按比例放大) ═══════ */
+@media(min-width:1024px){
+  #archive, .group-page, .gp-hero, .gp-previews, .gp-top {
+    max-width: 1400px;
+  }
+  .archive-head { margin-bottom: 28px; }
+  
+  /* 归档各级标题字号与间距放大 */
+  .year-head { padding: 18px 0; }
+  .year-head .y { font-size: 32px; }
+  .year-head .yc { font-size: 11.5px; }
+  
+  .month-head { padding: 12px 18px; }
+  .month-head .m { font-size: 17px; }
+  .month-head .note { font-size: 14.5px; }
+  
+  .day-head { padding: 10px 16px; }
+  .day-head .d { font-size: 14.5px; }
+  .day-head .d-cn { font-size: 13.5px; }
+  
+  /* 桌面端印样小图与预览卡片适度放大 */
+  .contact-sheet {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px; grid-gap: 12px; padding: 14px 16px 20px;
+  }
+  .proof { border-radius: 12px; }
+  .proof .pf-num { font-size: 9px; padding: 3px 7px; }
+  
+  .gp-previews {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px; grid-gap: 16px;
+  }
+  .gp-preview-item { border-radius: 16px; padding: 10px 10px 12px; }
+  
+  /* 悬浮窗桌面端放大 */
+  .lb-inner { max-width: 1240px; max-height: 86vh; }
+  .lb-sidebar { width: 360px; padding: 32px 28px; }
+  .lb-title { font-size: 20px; }
+  .lb-caption { font-size: 13px; }
+}
+
+@media(min-width:1440px){
+  #archive, .group-page, .gp-hero, .gp-previews, .gp-top {
+    max-width: 1540px;
+  }
+  .contact-sheet {
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 14px; grid-gap: 14px;
+  }
+  .gp-previews {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px; grid-gap: 18px;
+  }
+}
+
+/* 空状态 */
+.empty{text-align:center;padding:60px 20px;font-family:var(--serif);font-size:15px;color:var(--text-faint)}
+
+@media(max-width:760px){
+  .topbar{padding:6px 14px;gap:8px}
+  .bar-stat{display:none}
+  .month{margin-left:14px}
+  .day{margin-left:12px}
+  .contact-sheet{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;grid-gap:6px}
+  .day-head{gap:8px}
+}
+
+/* ═══════ 管理面板 ═══════ */
+.admin{position:fixed;top:0;left:0;right:0;bottom:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:16px}
+.admin-mask{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(5,4,10,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.admin-box{position:relative;width:94vw;max-width:560px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:20px;padding:26px 26px 22px}
+.admin-box::-webkit-scrollbar{width:5px}
+.admin-box::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:999px}
+.admin-close{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;
+  background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--text);font-size:12px;
+  display:flex;align-items:center;justify-content:center;transition:.3s}
+.admin-close:hover{background:var(--coral);transform:rotate(90deg)}
+.admin-title{font-family:var(--serif);font-weight:900;font-size:20px;letter-spacing:.05em;margin-bottom:6px}
+.admin-status{font-family:var(--mono);font-size:10px;letter-spacing:.06em;line-height:1.9;color:var(--text-dim);
+  padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);margin-bottom:16px}
+.admin-status .ok{color:var(--mint)}
+.admin-status .no{color:var(--coral)}
+
+/* ── 站长面板:常驻状态看板 + 标签页导航(避免一长条滚动找功能) ── */
+.admin-head{padding-right:44px}
+.admin-head-t{font-family:var(--serif);font-weight:900;font-size:20px;letter-spacing:.05em}
+.admin-head .admin-status{margin:10px 0 14px}
+.admin-tabs{display:flex;gap:6px;margin-bottom:16px;padding:4px;border-radius:12px;
+  background:rgba(0,0,0,.22);border:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.admin-tabs::-webkit-scrollbar{display:none}
+.atab{flex:1;white-space:nowrap;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+  padding:9px 12px;border-radius:9px;cursor:pointer;border:none;background:none;color:var(--text-dim);
+  transition:background .25s,color .25s;text-align:center}
+.atab:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.atab.on{color:#fff;background:linear-gradient(135deg,var(--coral),var(--apricot));
+  box-shadow:0 4px 14px -5px rgba(255,94,91,.55)}
+html[data-theme="bright"] .atab.on{background:linear-gradient(135deg,var(--teal),var(--leaf));
+  box-shadow:0 4px 14px -5px rgba(14,159,131,.5)}
+html[data-theme="bright"] .admin-tabs{background:rgba(0,0,0,.04)}
+html[data-theme="bright"] .atab:hover{background:rgba(0,0,0,.05)}
+/* 分页:同一时刻只显示一个,减少滚动 */
+.apane{display:none}
+.apane.on{display:block;animation:paneIn .3s var(--ease) both}
+@keyframes paneIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.pane-intro{font-size:12px;line-height:1.85;color:var(--text-dim);margin-bottom:14px;font-family:var(--sans)}
+.pane-note{font-size:10.5px;line-height:1.8;color:var(--text-faint);margin-top:12px;
+  padding-top:11px;border-top:1px dashed var(--border);font-family:var(--sans)}
+.admin-btn-lg{width:100%;margin-top:6px}
+
+.admin-sec{margin-bottom:18px;padding:16px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--border)}
+.admin-sec-t{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--sun);margin-bottom:12px}
+.admin-field{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.admin-field:last-child{margin-bottom:0}
+.admin-field label{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--text-faint)}
+.admin-field input,.admin-field textarea{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:9px;
+  color:var(--text);font-family:var(--sans);font-size:12.5px;padding:9px 12px;outline:none;transition:border-color .3s;resize:vertical}
+.admin-field input:focus,.admin-field textarea:focus{border-color:rgba(255,169,77,.5)}
+.admin-field input[type=file]{padding:7px 10px;font-size:11px}
+.admin-field input[type=date]{color-scheme:dark}
+.admin-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;grid-gap:10px}
+/* 每张照片各自的相机参数(选片后自动逐张识别) */
+.af-exif-list{margin:-4px 0 12px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;
+  background:rgba(255,169,77,.05);padding:8px 10px}
+.af-exif-list::-webkit-scrollbar{width:4px}
+.af-exif-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:999px}
+.af-exif-row{padding:6px 2px}
+.af-exif-row+.af-exif-row{border-top:1px dashed rgba(255,255,255,.08)}
+.af-exif-line{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:10px;line-height:1.7}
+.af-exif-num{flex:none;color:var(--sun)}
+.af-exif-file{flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-faint)}
+.af-exif-val{flex:1;min-width:0;word-break:break-all;color:var(--apricot)}
+.af-exif-val.none{color:var(--text-faint)}
+.af-warn{color:var(--coral)}
+.af-desc{margin-top:6px;width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--sans);font-size:12px;line-height:1.7;padding:7px 10px;outline:none;resize:vertical;transition:border-color .3s}
+.af-desc:focus{border-color:rgba(255,209,102,.5)}
+.af-desc::placeholder{color:var(--text-faint)}
+.af-tip{display:block;margin-top:4px;font-family:var(--sans);font-size:10px;line-height:1.6;color:var(--text-faint)}
+.admin-btn{font-family:var(--mono);font-size:11px;letter-spacing:.14em;padding:10px 18px;border-radius:999px;
+  border:1px solid var(--border);background:rgba(255,255,255,.07);color:var(--text);transition:.3s;cursor:pointer}
+.admin-btn:hover{background:rgba(255,255,255,.12)}
+.admin-btn-primary{background:linear-gradient(135deg,var(--coral),var(--apricot));border-color:transparent;color:#fff;
+  box-shadow:0 0 24px -6px rgba(255,94,91,.4);width:100%;margin-top:4px}
+.admin-btn-primary:hover{box-shadow:0 0 32px -4px rgba(255,94,91,.55)}
+.admin-btn:disabled{opacity:.5;pointer-events:none}
+/* 站点发布(COS 静态网站域名,国内直连无提示页) */
+.admin-hint{font-size:11px;line-height:1.8;color:var(--text-faint);margin:-4px 0 12px;font-family:var(--sans)}
+.admin-pub-out{margin-top:12px;padding:12px 14px;border:1px solid rgba(6,214,160,.35);border-radius:10px;
+  background:rgba(6,214,160,.06);font-family:var(--mono);font-size:11px;line-height:1.9;word-break:break-all}
+.admin-pub-out a{color:var(--sun);text-decoration:underline}
+.admin-pub-out b{font-weight:700}
+.admin-prog{position:relative;height:26px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:4px 0 10px}
+
+/* ═══════ 已上传照片管理(删除/替换单张,改单张介绍) ═══════ */
+.mg-list{margin-top:14px;max-height:56vh;overflow-y:auto;border:1px solid var(--border);border-radius:12px;
+  background:rgba(0,0,0,.14);padding:4px 10px 10px}
+.mg-list::-webkit-scrollbar{width:4px}
+.mg-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:999px}
+.mg-group{padding:10px 2px 6px}
+.mg-group+.mg-group{border-top:1px dashed rgba(255,255,255,.10)}
+.mg-g-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;
+  letter-spacing:.08em;color:var(--text-dim);padding:2px 0 8px}
+.mg-g-head .mg-g-title{color:var(--text);font-family:var(--serif);font-size:13px;letter-spacing:.06em}
+.mg-g-head .mg-g-act{margin-left:auto}
+.mg-ph{display:flex;gap:10px;padding:8px 2px;border-radius:10px;transition:background .25s}
+.mg-ph+.mg-ph{border-top:1px dashed rgba(255,255,255,.07)}
+.mg-ph:hover{background:rgba(255,255,255,.03)}
+.mg-thumb{width:64px;height:80px;flex:none;object-fit:cover;border-radius:8px;border:1px solid var(--border);
+  background:#0d0b12;cursor:pointer}
+.mg-main{flex:1;min-width:0}
+.mg-line{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:10px;line-height:1.7;
+  color:var(--text-dim);flex-wrap:wrap}
+.mg-line .mg-num{color:var(--text-faint)}
+.mg-line .mg-t{color:var(--text)}
+.mg-line .mg-exif{color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mg-desc{margin-top:6px;width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--sans);font-size:12px;line-height:1.7;padding:7px 10px;outline:none;resize:vertical;transition:border-color .3s}
+.mg-desc:focus{border-color:rgba(255,209,102,.5)}
+.mg-desc::placeholder{color:var(--text-faint)}
+.mg-acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.mg-btn{font-family:var(--mono);font-size:10px;letter-spacing:.12em;padding:5px 12px;border-radius:999px;
+  border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text-dim);transition:.25s;cursor:pointer}
+.mg-btn:hover{color:var(--text);background:rgba(255,255,255,.12)}
+.mg-btn.danger{border-color:rgba(255,94,91,.42);color:#ff9d8a}
+.mg-btn.danger:hover{background:rgba(255,94,91,.16);color:#ffb3a3}
+.mg-btn.busy{opacity:.45;pointer-events:none}
+.mg-empty{padding:18px 6px;text-align:center;font-family:var(--sans);font-size:12px;color:var(--text-faint);line-height:1.9}
+html[data-theme="bright"] .mg-list{background:rgba(255,255,255,.55);border-color:rgba(30,59,52,.14)}
+html[data-theme="bright"] .mg-group+.mg-group{border-color:rgba(30,59,52,.12)}
+html[data-theme="bright"] .mg-ph+.mg-ph{border-color:rgba(30,59,52,.08)}
+html[data-theme="bright"] .mg-ph:hover{background:rgba(14,159,131,.06)}
+html[data-theme="bright"] .mg-thumb{background:#EDF3EC}
+html[data-theme="bright"] .mg-desc{border-color:rgba(30,59,52,.28);background:rgba(255,255,255,.65)}
+html[data-theme="bright"] .mg-btn{border-color:rgba(30,59,52,.22);background:rgba(255,255,255,.6);color:rgba(20,53,45,.8)}
+html[data-theme="bright"] .mg-btn.danger{border-color:rgba(224,90,71,.45);color:#C7402E}
+html[data-theme="bright"] .mg-btn.danger:hover{background:rgba(224,90,71,.12)}
+.admin-prog-bar{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:999px;
+  background:linear-gradient(90deg,var(--coral),var(--apricot),var(--sun));transition:width .3s}
+.admin-prog span{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+@media(max-width:600px){
+  .admin-box{padding:18px 16px 16px}
+  .admin-row2{grid-template-columns:1fr}
+  /* iOS 聚焦输入框字号<16px 会自动放大页面 */
+  .admin-field input:not([type=file]),.admin-field textarea{font-size:16px}
+}
+
+/* ═══════ 保存浮层动画 ═══════ */
+@keyframes savePulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ═══════ 老内核兼容(QQ/微信 X5 · Chromium 57~86) ═══════ */
+/* 无 backdrop-filter:玻璃面板提高底色不透明度,保证可读性 */
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  .glass{background:rgba(28,24,38,.88);box-shadow:0 20px 50px -16px rgba(10,8,20,.66),inset 0 1px 0 rgba(255,255,255,.2)}
+  .gp-back{background:rgba(13,11,18,.94)}
+  .admin-mask{background:rgba(5,4,10,.95)}
+  .proof .pf-num{background:rgba(0,0,0,.55)}
+}
+/* 无 flex gap(Chrome<84):由 JS 检测挂 no-flexgap 类,改用 margin 间距 */
+.no-flexgap .topbar>*+*{margin-left:12px}
+.no-flexgap .archive-head>*+*{margin-left:16px}
+.no-flexgap .archive-tools>*+*{margin-left:8px}
+.no-flexgap .year-head>*+*{margin-left:14px}
+.no-flexgap .month-head>*+*{margin-left:12px}
+.no-flexgap .day-head>*+*{margin-left:10px}
+.no-flexgap .gp-back>*+*{margin-left:6px}
+.no-flexgap .gp-chip>*+*{margin-left:6px}
+.no-flexgap .lb-actions>*+*{margin-top:8px}
+.no-flexgap .lb-btn>*+*{margin-left:6px}
+.no-flexgap .admin-field>*+*{margin-top:5px}
+@media(max-width:760px){
+  .no-flexgap .topbar>*+*{margin-left:8px}
+  .no-flexgap .day-head>*+*{margin-left:8px}
+}
+</style>
+<!-- ═══════ 主题D「夜林·清青」暗色档(html[data-theme="dark"] 生效):深林夜色底 + 青绿生命色 + 暖橙点缀 ────────── -->
+<style id="t-dark">
+html[data-theme="dark"]{
+  --teal:#2BC4A4;--leaf:#5FBF8A;--coral:#FF7A66;--apricot:#FF9F4D;--sun:#FFC46B;--mint:#8FE8C9;
+  --text:#F5F3EF;--text-dim:rgba(245,243,239,.82);--text-faint:rgba(245,243,239,.45);
+  --border:rgba(255,255,255,.14);
+  --bg:#0A0C10;--panel:rgba(16,19,26,.72);
+}
+/* 背景承载到固定合成层(.bg-glow)上,body 只留纯底色,去掉 background-attachment:fixed ——
+   旧内核滚动时会因固定背景反复重绘,去掉既提速又稳定 */
+html[data-theme="dark"] body{background:var(--bg)}
+html[data-theme="dark"] .bg-glow::before{background:
+  radial-gradient(110vmax 68vmax at 108% -12%,rgba(255,159,77,.18),transparent 56%),
+  radial-gradient(88vmax 60vmax at -12% 8%,rgba(43,196,164,.22),transparent 58%),
+  radial-gradient(72vmax 56vmax at 50% 118%,rgba(124,94,220,.16),transparent 60%),
+  linear-gradient(172deg,#0D1A14 0%,#0A1410 46%,#0C1620 100%)}
+html[data-theme="dark"] .bg-glow .blob.b1{background:radial-gradient(circle,rgba(43,196,164,.30),transparent 64%)}
+html[data-theme="dark"] .bg-glow .blob.b2{background:radial-gradient(circle,rgba(255,159,77,.22),transparent 64%)}
+html[data-theme="dark"] .bg-glow .blob.b3{background:radial-gradient(circle,rgba(95,191,138,.18),transparent 64%)}
+html[data-theme="dark"] .bg-glow .blob.b4{background:radial-gradient(circle,rgba(124,94,220,.20),transparent 64%)}
+html[data-theme="dark"] .bg-glow .blob.b5{background:radial-gradient(circle,rgba(255,196,107,.18),transparent 64%)}
+html[data-theme="dark"] .bg-glow .blob.b6{background:radial-gradient(circle,rgba(88,140,255,.16),transparent 64%)}
+html[data-theme="dark"] .grain{opacity:.05}
+/* 深色玻璃 → 深林夜色镀膜 */
+html[data-theme="dark"] .glass{
+  background:linear-gradient(rgba(16,29,23,.80),rgba(14,25,20,.64));
+  border:1px solid rgba(170,225,205,.14);
+  box-shadow:0 24px 60px -20px rgba(2,6,4,.78),inset 0 1px 0 rgba(160,230,200,.18)}
+html[data-theme="dark"] .glass::before{background:linear-gradient(135deg,rgba(180,240,215,.22),transparent 30%,transparent 50%,rgba(43,196,164,.18))}
+/* 大标题与品牌 → 夜林青→翠绿→暖橙渐变 */
+html[data-theme="dark"] .brand,
+html[data-theme="dark"] .gp-title{
+  background:linear-gradient(120deg,#59E3C0 0%,#7FE5A8 46%,#FFC46B 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-theme="dark"] .theme-btn{background:rgba(255,255,255,.05);border-color:rgba(170,225,205,.20)}
+html[data-theme="dark"] .theme-btn:hover{border-color:rgba(255,196,107,.55);box-shadow:0 0 20px -6px rgba(255,159,77,.55)}
+/* 二级标题、参数点缀 */
+html[data-theme="dark"] .year-head .rule,
+html[data-theme="dark"] .day-head .rule{background:linear-gradient(90deg,rgba(170,225,205,.30),transparent)}
+html[data-theme="dark"] .day-head:hover{background:rgba(43,196,164,.13)}
+html[data-theme="dark"] .lb-sidebar::-webkit-scrollbar-thumb{background:rgba(170,225,205,.20)}
+/* 图片卡 → 深林透光卡 + 柔和投影 */
+html[data-theme="dark"] .proof,
+html[data-theme="dark"] .gp-preview-item{
+  background:linear-gradient(160deg,rgba(22,38,30,.92),rgba(14,25,20,.82));
+  border-color:rgba(170,225,205,.12);
+  box-shadow:0 16px 40px -18px rgba(2,6,4,.72)}
+html[data-theme="dark"] .proof:hover{border-color:rgba(43,196,164,.55);box-shadow:0 26px 54px -20px rgba(43,196,164,.45)}
+html[data-theme="dark"] .gp-thumb{background:rgba(21,36,28,.55)}
+/* 每图参数小卡 → 夜林青绿 */
+html[data-theme="dark"] .gp-exif-cap{background:rgba(43,196,164,.10);border-color:rgba(43,196,164,.32)}
+html[data-theme="dark"] .gp-ph,html[data-theme="dark"] .gp-pb{color:var(--mint)}
+/* 悬浮窗 → 深林舞台 */
+html[data-theme="dark"] .lightbox{background:rgba(4,9,7,.56)}
+html[data-theme="dark"] .lb-stage{background:linear-gradient(160deg,#0E1B15,#0A1410)}
+html[data-theme="dark"] .lb-stage .nav-btn{border-color:rgba(170,225,205,.26);color:var(--text)}
+html[data-theme="dark"] .lb-quality.ready{color:var(--mint);border-color:rgba(43,196,164,.55)}
+html[data-theme="dark"] .lb-btn-primary,
+html[data-theme="dark"] .admin-btn-primary,
+html[data-theme="dark"] .lb-stage .nav-btn:hover{background:linear-gradient(135deg,var(--teal),var(--leaf))}
+html[data-theme="dark"] .tool-btn{color:var(--text-dim);border-color:var(--border)}
+html[data-theme="dark"] .tool-btn:hover{color:var(--teal);border-color:rgba(43,196,164,.55)}
+html[data-theme="dark"] .gp-chip,html[data-theme="dark"] .gp-meta{color:var(--text-dim)}
+html[data-theme="dark"] .disc:hover{box-shadow:0 10px 30px -6px rgba(43,196,164,.45),0 0 0 3px rgba(255,159,77,.3)}
+html[data-theme="dark"] ::selection{background:var(--teal);color:#06231A}
+html[data-theme="dark"] :focus-visible{outline-color:var(--teal)}
+</style>
+<!-- ═══════ 主题A「晴天·亮白」明亮清新版(data-theme=bright 时生效,默认档) ═══════ -->
+<style id="t-bright">
+html[data-theme="bright"]{
+  --teal:#0E9F83;--leaf:#3E9064;
+  --coral:#E05A47;--apricot:#EE9450;--sun:#D98E2B;--mint:#1B9A80;
+  --text:#14352D;--text-dim:rgba(20,53,45,.82);--text-faint:rgba(20,53,45,.66);
+  --border:rgba(30,59,52,.16);
+  --bg:#FBF9F3;--panel:rgba(255,255,255,.78);
+}
+html[data-theme="bright"] body{background:var(--bg)}
+html[data-theme="bright"] .bg-glow::before{background:
+  radial-gradient(110vmax 62vmax at 106% -10%,rgba(238,148,80,.20),transparent 56%),
+  radial-gradient(88vmax 58vmax at -12% 8%,rgba(14,159,131,.16),transparent 58%),
+  radial-gradient(72vmax 54vmax at 50% 120%,rgba(122,150,255,.14),transparent 60%),
+  linear-gradient(175deg,#FFFFFF 0%,#FBF9F3 44%,#EEF6EA 100%)}
+html[data-theme="bright"] .bg-glow .blob.b1{background:radial-gradient(circle,rgba(14,159,131,.22),transparent 64%)}
+html[data-theme="bright"] .bg-glow .blob.b2{background:radial-gradient(circle,rgba(238,148,80,.20),transparent 64%)}
+html[data-theme="bright"] .bg-glow .blob.b3{background:radial-gradient(circle,rgba(62,144,100,.16),transparent 64%)}
+html[data-theme="bright"] .bg-glow .blob.b4{background:radial-gradient(circle,rgba(122,90,200,.14),transparent 64%)}
+html[data-theme="bright"] .bg-glow .blob.b5{background:radial-gradient(circle,rgba(217,142,43,.16),transparent 64%)}
+html[data-theme="bright"] .bg-glow .blob.b6{background:radial-gradient(circle,rgba(88,150,220,.14),transparent 64%)}
+html[data-theme="bright"] .grain{opacity:.05}
+html[data-theme="bright"] .glass{
+  background:linear-gradient(rgba(255,255,255,.92),rgba(255,255,255,.66));
+  border:1px solid rgba(30,59,52,.10);
+  box-shadow:0 24px 60px -28px rgba(30,80,64,.4),inset 0 1px 0 rgba(255,255,255,1)}
+html[data-theme="bright"] .glass::before{background:none}
+html[data-theme="bright"] .brand,
+html[data-theme="bright"] .gp-title{
+  background:linear-gradient(120deg,#0E9F83 0%,#6FBE91 45%,#E89B3A 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-theme="bright"] .year-head .rule,
+html[data-theme="bright"] .day-head .rule{background:linear-gradient(90deg,rgba(30,59,52,.40),transparent)}
+html[data-theme="bright"] .day-head:hover{background:rgba(14,159,131,.08)}
+html[data-theme="bright"] .proof,
+html[data-theme="bright"] .gp-preview-item{
+  background:linear-gradient(180deg,#FFFFFF 0%,#FAF9F5 100%);
+  border:1px solid rgba(0,0,0,.08);
+  box-shadow:inset 0 1px 0 #FFFFFF,0 10px 28px -10px rgba(40,40,35,.12);
+}
+html[data-theme="bright"] .proof:hover,
+html[data-theme="bright"] .gp-preview-item:hover{
+  border-color:rgba(14,159,131,.4);
+  box-shadow:inset 0 1px 0 #FFFFFF,0 18px 40px -12px rgba(14,159,131,.25);
+}
+html[data-theme="bright"] .gp-thumb{background:#EDF3EC}
+html[data-theme="bright"] .gp-exif-cap{background:rgba(14,159,131,.08);border-color:rgba(14,159,131,.36)}
+html[data-theme="bright"] .gp-ph{color:#0B7A63}
+html[data-theme="bright"] .gp-pb{color:#1F6B4E}
+html[data-theme="bright"] .lb-sidebar{background:linear-gradient(180deg,rgba(255,255,255,.97),rgba(251,248,241,.99));border-left:1px solid rgba(30,59,52,.14)}
+html[data-theme="bright"] .lb-exif{background:rgba(217,142,43,.07);border-color:rgba(217,142,43,.32)}
+html[data-theme="bright"] .lb-sidebar::-webkit-scrollbar-thumb{background:rgba(30,59,52,.20)}
+html[data-theme="bright"] .lightbox{background:rgba(24,44,38,.30)}
+html[data-theme="bright"] .lb-stage{background:linear-gradient(160deg,#FFFFFF,#EFF6EE)}
+html[data-theme="bright"] .lb-stage .nav-btn{border-color:rgba(30,59,52,.2)}
+html[data-theme="bright"] .lb-btn-primary,
+html[data-theme="bright"] .admin-btn-primary,
+html[data-theme="bright"] .lb-stage .nav-btn:hover{background:linear-gradient(135deg,var(--teal),var(--leaf))}
+html[data-theme="bright"] .disc:hover{box-shadow:0 10px 30px -6px rgba(14,159,131,.4),0 0 0 3px rgba(236,160,80,.25)}
+html[data-theme="bright"] ::selection{background:var(--teal);color:#fff}
+html[data-theme="bright"] :focus-visible{outline-color:var(--teal)}
+/* 亮色下文字清晰保证 */
+html[data-theme="bright"] .tool-btn{color:var(--text-dim);border-color:var(--border)}
+html[data-theme="bright"] .gp-back{background:rgba(255,255,255,.88);border-color:rgba(30,59,52,.18);color:var(--text-dim)}
+html[data-theme="bright"] .gp-back:hover{background:#fff;color:var(--teal);border-color:rgba(14,159,131,.55)}
+html[data-theme="bright"] .tool-btn:hover{color:var(--teal);border-color:rgba(14,159,131,.55)}
+html[data-theme="bright"] .gp-chip,html[data-theme="bright"] .gp-meta{color:var(--text-dim)}
+/* 亮色下无参数占位框 / 悬浮窗 EXIF 虚线分隔 / 管理面板输入件的可读性补齐 */
+html[data-theme="bright"] .gp-noex{border-color:rgba(30,59,52,.22)}
+html[data-theme="bright"] .exm-cell{border-color:rgba(28,59,51,.16)}
+html[data-theme="bright"] .exm-l{color:rgba(20,53,45,.55)}
+html[data-theme="bright"] .admin-field input,
+html[data-theme="bright"] .admin-field textarea,
+html[data-theme="bright"] .af-desc{border-color:rgba(30,59,52,.28);background:rgba(255,255,255,.65)}
+html[data-theme="bright"] .af-exif-val{color:#B3560F}
+html[data-theme="bright"] .admin-prog{background:rgba(28,59,51,.12)}
+html[data-theme="bright"] .admin-prog-bar{background:linear-gradient(90deg,var(--teal),var(--leaf))}
+</style>
+<!-- ═══════ 标题文字鲁棒兜底层:旧内核不支持 background-clip:text 时渐变字会隐形 ──────────
+     统一改为实心青绿色,保证任何内核/设备都可见。此块放最后,以最高优先级锁定. ── -->
+<style id="t-title-safe">
+.brand,.gp-title{
+  color:var(--mint) !important;
+  -webkit-text-fill-color:var(--mint) !important;
+  background-image:none !important;
+  -webkit-background-clip:initial !important;
+  background-clip:initial !important;
+}
+</style>
+</head>
+<body>
+<script>
+/* 首帧前设备分级:
+   inapp = 内置浏览器(微信/QQ/微博/钉钉/支付宝/百度/抖音/贴吧);
+   lite  = 一切触屏/小屏设备(手机浏览器同样命中,不只微信)。
+   lite 是"轻量渲染路径":关掉每帧全屏特效(光斑动画/噪点混合/毛玻璃),
+   桌面(鼠标+大屏)才开全套特效——保证任何手机上滚动都零全屏逐帧工作 */
+(function(){
+  var u=navigator.userAgent||'';
+  var inapp=/MicroMessenger|MQQBrowser|QQ\/|QZONE|Weibo|DingTalk|AlipayClient|baiduboxapp|snssdk|aweme|tieba/i.test(u);
+  var touch=('ontouchstart' in window)||(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
+  var small=window.innerWidth<760;
+  var de=document.documentElement;
+  if(inapp)de.classList.add('inapp');
+  if(inapp||touch||small)de.classList.add('lite');
+})();
+</script>
+<script>
+/* ─── 老内核垫片(padStart 需 Chrome 57+) ─── */
+if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=String(this);c=c||' ';while(s.length<n)s=c+s;return s}}
+
+/* X5/XWeb 老内核能力检测:flex gap 不支持时挂 no-flexgap 类,首屏前完成避免闪烁 */
+(function(){
+  var need=false;
+  try{
+    var t=document.createElement('div');
+    t.style.cssText='display:flex;gap:10px;position:absolute;visibility:hidden;pointer-events:none';
+    var a=document.createElement('span');a.style.cssText='width:10px;height:1px;display:block';
+    var b=a.cloneNode();
+    t.appendChild(a);t.appendChild(b);document.body.appendChild(t);
+    need=Math.abs(b.offsetLeft-a.offsetLeft-20)>3;   /* 10+10(间距)<20 → gap 无效 */
+    t.parentNode.removeChild(t);
+  }catch(e){need=true}
+  if(need)document.documentElement.classList.add('no-flexgap');
+})();
+</script>
+
+<div class="tt-veil" id="ttVeil" aria-hidden="true"></div>
+  <div class="bg-glow"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div><div class="blob b5"></div><div class="blob b6"></div></div>
+<div class="grain"></div>
+
+<!-- 顶部栏(管理入口已移除:直接访问 网址#admin 或 logo 连点 5 次) -->
+<nav class="topbar glass" aria-label="导航">
+  <div class="brand" id="brandHome">Phototropic</div>
+  <div class="bar-spacer"></div>
+  <button class="theme-btn" id="themeBtn" role="switch" aria-checked="true" aria-label="切换明暗主题" title="切换明暗主题">
+    <span class="tb-thumb"></span>
+    <span class="tb-icon" data-role="sun" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17"><circle cx="12" cy="12" r="3.7"/><path d="M12 2.6v1.7M12 19.7v1.7M2.6 12h1.7M19.7 12h1.7M5.2 5.2l1.2 1.2M17.6 17.6l1.2 1.2M5.2 18.8l1.2-1.2M17.6 6.4l1.2-1.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+    <span class="tb-icon" data-role="moon" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17"><path d="M20.5 14.6A8.1 8.1 0 1 1 9.4 3.5 6.6 6.6 0 0 0 20.5 14.6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+  </button>
+  <span class="bar-stat" id="barStat">—</span>
+</nav>
+
+<!-- 背景音乐:黑胶唱片(访客默认静音,点击才开始播放) -->
+<div class="disc" id="disc" hidden role="button" aria-label="播放或暂停背景音乐" tabindex="0"></div>
+<div class="disc-tip" id="discTip"></div>
+
+<!-- 归档 -->
+<main id="archive">
+  <div class="archive-head">
+    <div class="archive-tools">
+      <button class="tool-btn" id="expandAll">全部展开</button>
+      <button class="tool-btn" id="collapseAll">全部收起</button>
+    </div>
+  </div>
+  <div id="years"></div>
+</main>
+
+<!-- 组详情子页面 -->
+<section class="group-page" id="groupPage" hidden>
+  <div class="gp-top">
+    <button class="gp-back" id="gpBack" aria-label="返回归档">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      返回归档
+    </button>
+  </div>
+
+  <div class="gp-hero">
+    <div class="gp-title-row">
+      <span class="gp-chip"><span class="dot"></span><span id="gpDate">2026 年 08 月 · 周一</span></span>
+      <h2 class="gp-title" id="gpTitle">雾锁钱塘</h2>
+      <p class="gp-loc" id="gpLoc">杭州 · 钱塘江</p>
+    </div>
+  </div>
+
+  <!-- 预览图区 -->
+  <div class="gp-previews" id="gpPreviews"></div>
+</section>
+
+<!-- 单图悬浮窗 -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="照片预览">
+  <div class="lb-inner glass">
+    <button class="lb-close" id="lbClose" aria-label="关闭">✕</button>
+    <div class="lb-stage">
+      <button class="nav-btn nav-prev" id="lbPrev" aria-label="上一张">←</button>
+      <img class="lb-img" id="lbImg" alt="" decoding="async">
+      <button class="nav-btn nav-next" id="lbNext" aria-label="下一张">→</button>
+      <div class="lb-quality" id="lbQuality">原图加载中 …</div>
+    </div>
+    <aside class="lb-sidebar">
+      <div class="lb-meta">
+        <div class="lb-title" id="lbTitle">—</div>
+        <div class="lb-group" id="lbGroup">—</div>
+        <div class="lb-idx" id="lbIdx">1 / 3</div>
+      </div>
+      <div class="lb-exif" id="lbExif">—</div>
+      <p class="lb-caption" id="lbCaption">—</p>
+      <div class="lb-divider"></div>
+      <div class="lb-actions">
+        <button class="lb-btn lb-btn-primary" id="lbDownload">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="lb-btn-label">下载原图</span>
+        </button>
+      </div>
+
+      <!-- 互动区:点赞 + 评论(数据存腾讯云 COS) -->
+      <div class="social">
+        <div class="sc-bar">
+          <button class="like-btn" id="likeBtn" type="button" aria-pressed="false" aria-label="点赞这张照片">
+            <svg viewBox="0 0 24 24"><path d="M12 20.3l-1.5-1.36C5.4 14.36 2 11.28 2 7.5 2 4.42 4.42 2 7.5 2c1.74 0 3.41.81 4.5 2.09C13.09 2.81 14.76 2 16.5 2 19.58 2 22 4.42 22 7.5c0 3.78-3.4 6.86-8.5 11.44L12 20.3z" stroke-linejoin="round"/></svg>
+            <span id="likeCount">0</span>
+          </button>
+          <div class="like-faces" id="likeFaces"></div>
+        </div>
+
+        <div class="cm-head">
+          <span class="cm-title">评论</span>
+          <span class="cm-count" id="cmCount">0</span>
+        </div>
+        <div class="cm-list" id="cmList"></div>
+
+        <div class="cm-form">
+          <div class="cm-form-row">
+            <textarea class="cm-input" id="cmInput" rows="2" maxlength="500" placeholder="说点什么…(回车发送)"></textarea>
+            <button class="cm-send" id="cmSend" type="button" aria-label="发送评论">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
+          <div class="cm-hint" id="cmHint"></div>
+          <div class="me-bar">
+            <span class="cm-av" id="meAv"></span>
+            <span class="me-name" id="meName">—</span>
+            <span class="me-edit" id="meEdit">改名字</span>
+          </div>
+          <div class="me-panel" id="mePanel" hidden>
+            <div class="me-panel-t">名字 · 最多 24 字</div>
+            <input class="me-input" id="meInput" maxlength="24" placeholder="给自己起个名字">
+            <div class="me-panel-t" style="margin-top:12px">选一个头像</div>
+            <div class="av-grid" id="avGrid"></div>
+            <div class="me-actions">
+              <button class="me-btn" id="meRandom" type="button">换个名字</button>
+              <button class="me-btn save" id="meSave" type="button">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- 管理面板 -->
+<div class="admin" id="adminPanel" hidden>
+  <div class="admin-mask" id="adminMask"></div>
+  <div class="admin-box glass">
+    <button class="admin-close" id="adminClose" aria-label="关闭">✕</button>
+
+    <!-- 常驻状态看板:一眼看清"能不能用" -->
+    <div class="admin-head">
+      <div class="admin-head-t">站长面板</div>
+      <div class="admin-status" id="adminStatus"></div>
+    </div>
+
+    <!-- 标签页导航 -->
+    <div class="admin-tabs" id="adminTabs" role="tablist">
+      <button class="atab on" data-tab="upload" role="tab" aria-selected="true">上传新照片</button>
+      <button class="atab" data-tab="manage" role="tab" aria-selected="false">管理已有</button>
+      <button class="atab" data-tab="music" role="tab" aria-selected="false">背景音乐</button>
+      <button class="atab" data-tab="setup" role="tab" aria-selected="false">站点设置</button>
+    </div>
+
+    <!-- ① 上传新照片(最高频,放第一位) -->
+    <form class="admin-sec apane on" id="adminForm" data-pane="upload">
+      <div class="pane-intro">选好照片 → 填写日期和标题 → 点上传。相机参数会自动识别,不用手填。</div>
+      <div class="admin-field"><label>照片 · 可一次多选</label><input id="afFiles" type="file" accept="image/*" multiple required><span class="af-tip">若相册只能单选,可分多次提交:同一日期会自动并入同一组</span></div>
+      <div class="af-exif-list" id="afExifList" hidden></div>
+      <div class="admin-row2">
+        <div class="admin-field"><label>拍摄日期 · 必填</label><input id="afDate" type="date" required></div>
+        <div class="admin-field"><label>拍照地点 · 选填</label><input id="afLoc" type="text" placeholder="杭州 · 钱塘江" maxlength="30"></div>
+      </div>
+      <div class="admin-field"><label>这组照片的标题 · 必填</label><input id="afTitle" type="text" placeholder="雾锁钱塘" maxlength="20" required></div>
+      <div class="admin-field"><label>整组介绍 · 选填</label><textarea id="afDesc" rows="3" placeholder="这组照片的背景、拍摄时的故事…" maxlength="300"></textarea></div>
+      <div class="admin-field"><label>整组通用相机参数 · 选填</label><input id="afExif" type="text" placeholder="单张没识别出参数时才用这个兜底,一般留空即可" maxlength="120"></div>
+      <div class="admin-prog" id="adminProg" hidden><div class="admin-prog-bar" id="adminProgBar"></div><span id="adminProgTxt"></span></div>
+      <button class="admin-btn admin-btn-primary admin-btn-lg" id="adminSubmit" type="submit">开始上传</button>
+    </form>
+
+    <!-- ② 管理已有照片 -->
+    <div class="admin-sec apane" id="adminManageSec" data-pane="manage">
+      <div class="pane-intro">点下面按钮载入云端照片列表,然后就能逐张删除、替换或修改介绍。</div>
+      <button class="admin-btn admin-btn-lg" id="manageLoad" type="button">载入已上传照片</button>
+      <div class="mg-list" id="mgList" hidden></div>
+      <div class="pane-note">删除会同时移除云端文件,组内最后一张被删时整组一并移除;替换会为新文件重新识别参数并移除旧文件;介绍在输入框失焦时自动保存。点缩略图可在新标签查看原图。</div>
+    </div>
+
+    <!-- ③ 背景音乐 -->
+    <div class="admin-sec apane" id="adminMusicSec" data-pane="music">
+      <div class="pane-intro">上传后在访客页面右下角出现黑胶唱片。访客默认静音,点了才播放,不会打扰任何人。</div>
+      <div class="admin-field"><label>音频文件 · 可多选</label><input id="mfFiles" type="file" accept="audio/*" multiple></div>
+      <button class="admin-btn admin-btn-lg" id="musicUpload" type="button">上传背景音乐</button>
+      <div class="pane-note">支持 mp3 / m4a 等格式,多首会自动连播并循环。上传完刷新一次页面即生效。</div>
+    </div>
+
+    <!-- ④ 站点设置(密钥 + 发布) -->
+    <div class="apane" data-pane="setup">
+      <div class="admin-sec" id="adminKeysSec">
+        <div class="admin-sec-t">第一步 · 填入腾讯云密钥</div>
+        <div class="pane-intro">这是让网站能上传照片的钥匙,只需要填一次。密钥只存在你自己的浏览器里,不会上传到任何服务器。</div>
+        <form id="adminKeyForm" autocomplete="on">
+          <div class="admin-field"><label>SecretId · 相当于账号</label><input id="adminSid" name="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="AKID 开头的一长串"></div>
+          <div class="admin-field"><label>SecretKey · 相当于密码</label><input id="adminSkey" name="password" type="password" autocomplete="current-password" placeholder="点下面按钮可从浏览器记忆带回"></div>
+          <div class="admin-row2">
+            <button class="admin-btn" id="adminFillCreds" type="button">从浏览器填充</button>
+            <button class="admin-btn admin-btn-primary" id="adminSaveKeys" type="submit">保存到本机</button>
+          </div>
+        </form>
+        <div class="pane-note">在哪找:登录腾讯云 → 右上角头像 → 访问管理 → API 密钥管理。<br>保存后浏览器可能弹出"记住密码",同意它,下次换设备或清了缓存就能一键带回。</div>
+      </div>
+
+      <div class="admin-sec" id="adminPubSec">
+        <div class="admin-sec-t">第二步 · 备份页面源码(可选)</div>
+        <div class="pane-intro">把当前页面的完整源码存一份到云端,作为备份。日常不需要操作。</div>
+        <div class="admin-field"><label>页面文件 · 通常自动抓取,失败时手动选</label><input id="pfFile" type="file" accept=".html,text/html"></div>
+        <button class="admin-btn" id="adminPublish" type="button">备份当前页面</button>
+        <div class="admin-pub-out" id="pubOut" hidden></div>
+        <div class="pane-note">线上正式页面由 GitHub + Render 托管:把新版源码推送到仓库,约 40 秒后自动重新部署生效。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s);
+const U=(id,w)=>`https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
+/* 转义:查表替换(旧版用 createElement+innerHTML,每次调用都要建一个 DOM 节点并触发HTML解析,
+   在渲染评论列表这种循环里开销明显)。查表法纯字符串操作,快一个量级且行为完全一致 */
+const ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>ESC_MAP[c]);
+
+/* ─── 演示数据(云端未配置或 data.json 不存在时显示) ─── */
+/* g: 组(某天); gs: 组内照片; d: 房主给某张照片的介绍(可选,显示在悬浮窗) */
+const DEMO_GROUPS=[
+ {d:'2026-08-24',loc:'杭州 · 钱塘江',title:'雾锁钱塘',note:'显影中',
+  c:'江面吐了一夜的雾,天亮时塔浮在上面。等了两小时,只为雾散前的三分钟。同一片雾,拍了三个版本。',
+  exif:'FUJIFILM X-T5 · XF 56mm F1.2 R WR<br>56mm · f/1.4 · 1/500s · ISO 320',
+  gs:[
+    {t:'雾中塔 · 之一',u:'photo-1470071459604-3b5ec3a7fe05',ph:['#23303b','#9BD8CC']},
+    {t:'雾中塔 · 之二',u:'photo-1495562569060-2eec283d3391',ph:['#28343c','#8FCBBF'],d:'雾最浓的一刻,塔几乎要融进天里。'},
+    {t:'雾中塔 · 之三',u:'photo-1506744038136-46273834b3fb',ph:['#1e2a33','#7FB3A6'],d:'雾散前的最后三分钟,光终于落回江面。'}
+  ],
+},
+ {d:'2026-08-18',loc:'大兴安岭 · 呼中',title:'森林的呼吸',note:'显影中',
+  c:'零下二十六度,冷杉一动不动。快门响的那一秒,整片林子呼出一口白气。',
+  exif:'SONY α7R V · FE 16-35mm F2.8 GM<br>24mm · f/8 · ISO 200',
+  gs:[
+    {t:'森林的呼吸 · 广',u:'photo-1487621167305-5d248087c724',ph:['#0e1f1b','#2FA693']},
+    {t:'森林的呼吸 · 竖',u:'photo-1448375240586-882707db888b',ph:['#0d1d19','#2c9c84']}
+  ],
+},
+ {d:'2026-08-09',loc:'本溪 · 老边沟',title:'枫径',note:'显影中',
+  c:'十月,雾未散,落叶没过脚踝。走到路的尽头回头——它像一条烧起来的河。',
+  exif:'Nikon Z8 · Nikkor Z 70-200mm f/2.8<br>135mm · f/2.8 · ISO 400',
+  gs:[
+    {t:'枫径 · 正片',u:'photo-1477414348463-c0eb7f1359b6',ph:['#2b1710','#D4552E']},
+    {t:'枫径 · 局部',u:'photo-1507041957456-9c397ce39c97',ph:['#2d1812','#EFA98A']}
+  ],
+},
+ {d:'2026-08-03',loc:'川西 · 子梅垭口',title:'雪线之上',note:'显影中',
+  c:'海拔四千六,风把云撕开一道口子,主峰只给了四十秒。四十秒,够记一辈子。',
+  exif:'Canon EOS R6 II · RF 70-200mm F4<br>180mm · f/8 · ISO 100',
+  gs:[
+    {t:'雪线 · 主峰',u:'photo-1506905925346-21bda4d32df4',ph:['#1c2430','#9BD8CC']},
+    {t:'雪线 · 云海',u:'photo-1464822759023-fed622ff2c3b',ph:['#1a2530','#8BBFD4']}
+  ],
+},
+ {d:'2026-08-01',loc:'上海 · 武康路',title:'雨窗',note:'显影中',
+  c:'躲雨的二十分钟。玻璃外的城市被雨点揉皱,每个光斑都是一枚没寄出的邮资。',
+  exif:'FUJIFILM X100VI<br>23mm · f/2 · ISO 800',
+  gs:[
+    {t:'雨窗 · 之一',u:'photo-1428592953211-077101b2021b',ph:['#1a2027','#EFA98A']}
+  ],
+},
+ {d:'2026-07-28',loc:'青海 · 翡翠湖',title:'湖之息',note:'定影完毕',
+  c:'无人机升到一百二十米,湖面静得像一张没拆封的相纸。倒影里的山,比山更像山。',
+  exif:'DJI Mavic 3 Pro · 哈苏镜头<br>24mm · f/4 · ISO 100',
+  gs:[
+    {t:'湖之息 · 俯瞰',u:'photo-1501785888041-af3ef285b470',ph:['#0f2830','#2FA693']}
+  ],
+},
+ {d:'2026-07-15',loc:'长白山 · 二道白河',title:'林间尽头',note:'定影完毕',
+  c:'白桦把季节交给枫树。林子尽头亮起来的那一刻,快门和心跳同一个频率。',
+  exif:'Nikon Zf · 40mm f/2<br>40mm · f/8 · ISO 100',
+  gs:[
+    {t:'林间尽头 · 横',u:'photo-1444492417251-9c84a5fa18e0',ph:['#241610','#D4552E']}
+  ],
+},
+ {d:'2026-07-10',loc:'重庆 · 南滨路',title:'夜航',note:'定影完毕',
+  c:'两江交汇的灯,像一艘永不进港的船。长曝四秒,江水把整座城重新冲洗了一遍。',
+  exif:'FUJIFILM X-T5 · XF 16-55mm F2.8<br>24mm · f/8 · 4s · ISO 160(三脚架)',
+  gs:[
+    {t:'夜航 · 全景',u:'photo-1444723121867-7a241cacace9',ph:['#101822','#9BD8CC']},
+    {t:'夜航 · 桥',u:'photo-1470004914212-05527e49370b',ph:['#0f1620','#7FB3C4']}
+  ],
+},
+ {d:'2026-07-04',loc:'青岛 · 八大关',title:'暮色四合',note:'定影完毕',
+  c:'晚上六点零四分,路灯比晚霞先亮。这座城市的温柔,全写在明暗交接的那条线上。',
+  exif:'Leica Q3 · Summilux 28mm<br>28mm · f/1.7 · ISO 100',
+  gs:[
+    {t:'暮色 · 街',u:'photo-1477959858617-67f85cf4f1df',ph:['#1e1a20','#EFA98A']}
+  ],
+},
+ {d:'2026-06-27',loc:'平遥 · 古城',title:'过客',note:'已入册',
+  c:'他推着车从我面前走过,没看镜头。古城每天几千个过客,只有一个成了底片。',
+  exif:'Leica M11 · 50mm Summilux<br>50mm · f/1.4 · ISO 64(银盐预设)',
+  gs:[
+    {t:'过客 · 正片',u:'photo-1506794778202-cad84cf45f1d',ph:['#191919','#8a8a8a']},
+    {t:'过客 · 剪影',u:'photo-1449824913935-59a10b8d2000',ph:['#1c1c1c','#7a7a7a']}
+  ],
+},
+ {d:'2026-06-15',loc:'杭州 · 满觉陇',title:'她与光',note:'已入册',
+  c:'桂花还没开,光先来了。她说不用看镜头——好,那就让光替她说话。',
+  exif:'Canon EOS R6 II · RF 85mm F1.8<br>85mm · f/1.8 · ISO 400',
+  gs:[
+    {t:'她与光 · 之一',u:'photo-1544005313-94ddf0286df2',ph:['#241c22','#EFA98A']}
+  ],
+},
+ {d:'2026-06-08',loc:'哈尔滨 · 中央大街',title:'北方以北',note:'已入册',
+  c:'零下三十度,他把领子立起来,眼里全是雪的反射光。北方人不需要摆姿势。',
+  exif:'Nikon Z8 · 35mm f/1.8 S<br>35mm · f/2 · ISO 1600',
+  gs:[
+    {t:'北方以北 · 街头',u:'photo-1500648767791-00dcc994a43e',ph:['#1a2129','#9BD8CC']}
+  ],
+},
+ {d:'2026-06-03',loc:'天目山 · 禅源寺后山',title:'苔与露',note:'已入册',
+  c:'一平方厘米的森林。蹲到膝盖发麻才明白:在苔藓的世界里,一颗露珠就是一场暴雨。',
+  exif:'OM SYSTEM OM-1 · 90mm F3.5 Macro<br>90mm · f/5.6 · ISO 800(景深合成 ×12)',
+  gs:[
+    {t:'苔与露 · 微距',u:'photo-1490750967868-88aa4486c946',ph:['#0f2018','#2FA693']}
+  ],
+  },
+ {d:'2026-06-01',loc:'内蒙古 · 明安图',title:'星轨之下',note:'已入册',
+  c:'拍了一整夜,地球替我转了三百六十度。银河落下来的时候,谁都会安静。',
+  exif:'SONY α7R V · 14mm F1.8 GM<br>14mm · f/1.8 · 15s × 240 张(星轨堆栈)',
+  gs:[
+    {t:'星轨 · 堆栈',u:'photo-1419242902214-272b3f66ee7a',ph:['#0b1526','#2FA693']},
+    {t:'星轨 · 银河',u:'photo-1435224668334-0f82ec57b605',ph:['#0a1220','#3f7c9c']}
+  ]
+}
+];
+
+/* ─── 云端配置:腾讯云 COS(图片 + 组数据) ─── */
+const CONFIG={
+  cosBucket:'zhao-1465501838',  /* 存储桶名(控制台可复制) */
+  cosRegion:'ap-nanjing',       /* 存储桶所在地域 */
+  apiBase:''                    /* 互动接口地址:同源部署留空即可(走相对路径 /api/…);前后端分域时填后端完整域名 */
+};
+
+/* 图片 URL:远程走 COS+缩略图参数,演示走 Unsplash */
+const pURL=(p,w)=>{
+  if(p.k)return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}?imageMogr2/thumbnail/${w}x`;
+  return U(p.u,w);
+};
+const pFull=p=>{
+  /* 手机屏幕不需要整张原图:解码一张 4000px JPEG 要上百毫秒主线程,
+     是"点开大图瞬间卡一下"的直接原因;lite 下无论 COS 还是演示图都取 ≤1600px
+     (COS 走 imageMogr2 缩略,观感在手机无可感知差异,长按保存仍是高清),桌面取原图 */
+  var lite=document.documentElement.classList.contains('lite');
+  if(p.k)return lite
+    ?`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}?imageMogr2/thumbnail/1600x`
+    :`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${p.k}`;
+  return U(p.u,lite?1200:2400);
+};
+
+/* ─── 数据仓库:优先读 COS 上的 data.json,读不到用内置演示数据 ─── */
+const Store={
+  groups:[],
+  remote:false,
+  async init(){
+    if(CONFIG.cosBucket){
+      try{
+        const r=await fetch(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'});
+        if(r.ok){
+          const d=await r.json();
+          if(d&&Array.isArray(d.groups)&&d.groups.length){
+            this.groups=d.groups.map(g=>({...g,gs:Array.isArray(g.gs)?g.gs:[]}));
+            this.remote=true;
+          }
+        }
+      }catch(e){}
+    }
+  },
+  setDemo(){
+    this.groups=DEMO_GROUPS.slice();
+    this.remote=false;
+  }
+};
+
+const YEARS=()=>[...new Set(Store.groups.map(g=>g.d.slice(0,4)))].sort().reverse();
+const monthsOf=y=>[...new Set(Store.groups.filter(g=>g.d.startsWith(y)).map(g=>g.d.slice(0,7)))].sort().reverse();
+const daysOf=ym=>Store.groups.filter(g=>g.d.startsWith(ym)).sort((a,b)=>b.d.localeCompare(a.d));
+const groupOf=d=>Store.groups.find(g=>g.d===d);
+const totalPhotos=()=>Store.groups.reduce((s,g)=>s+g.gs.length,0);
+const WEEK=['日','一','二','三','四','五','六'];
+const dayCn=d=>{const dt=new Date(d+'T00:00:00');return WEEK[dt.getDay()]};
+
+/* ─── 访客昵称(随机分配,可改名) ─── */
+/* ─── 访客身份:随机名字 + 12 款预设头像(几何艺术风,纯 SVG 零请求) ─── */
+const Avatar={
+  /* 12 款头像定义:底色 + 图形 + 前景色。纯字符生成,不请求任何图片 */
+  list:[
+    {id:'a1', bg:'#FF6B6B', fg:'#FFF3E6', shape:'circle'},
+    {id:'a2', bg:'#4ECDC4', fg:'#0B2B29', shape:'tri'},
+    {id:'a3', bg:'#FFD166', fg:'#4A3410', shape:'square'},
+    {id:'a4', bg:'#A78BFA', fg:'#1E1635', shape:'diamond'},
+    {id:'a5', bg:'#06D6A0', fg:'#05372A', shape:'ring'},
+    {id:'a6', bg:'#FF9F68', fg:'#4A2410', shape:'wave'},
+    {id:'a7', bg:'#5B8DEF', fg:'#0D1F45', shape:'circle'},
+    {id:'a8', bg:'#F472B6', fg:'#4A1030', shape:'tri'},
+    {id:'a9', bg:'#34D399', fg:'#052E22', shape:'diamond'},
+    {id:'a10',bg:'#FBBF24', fg:'#493307', shape:'ring'},
+    {id:'a11',bg:'#818CF8', fg:'#171A4A', shape:'wave'},
+    {id:'a12',bg:'#FB7185', fg:'#4A0F1C', shape:'square'}
+  ],
+  find(id){return this.list.find(a=>a.id===id)||this.list[0]},
+  /* 生成头像 SVG 字符串。头像图形固定、尺寸只有几种,用缓存避免重复拼字符串
+     (评论列表每次刷新都要为每条评论重建头像,不缓存会反复做字符串拼接) */
+  _cache:{},
+  svg(id,size){
+    const a=this.find(id),s=size||40;
+    const ck=a.id+'@'+s;
+    if(this._cache[ck])return this._cache[ck];
+    let inner='';
+    switch(a.shape){
+      case 'circle': inner=`<circle cx="20" cy="20" r="9" fill="${a.fg}"/>`; break;
+      case 'tri':    inner=`<path d="M20 10l9 16H11z" fill="${a.fg}"/>`; break;
+      case 'square': inner=`<rect x="11" y="11" width="18" height="18" rx="3" fill="${a.fg}"/>`; break;
+      case 'diamond':inner=`<path d="M20 9l11 11-11 11-11-11z" fill="${a.fg}"/>`; break;
+      case 'ring':   inner=`<circle cx="20" cy="20" r="9.5" fill="none" stroke="${a.fg}" stroke-width="4.5"/>`; break;
+      case 'wave':   inner=`<path d="M8 22c4-8 8 8 12 0s8 8 12 0" fill="none" stroke="${a.fg}" stroke-width="4" stroke-linecap="round"/>`; break;
+    }
+    const out=`<svg viewBox="0 0 40 40" width="${s}" height="${s}" aria-hidden="true">`+
+           `<rect width="40" height="40" rx="20" fill="${a.bg}"/>${inner}</svg>`;
+    this._cache[ck]=out;
+    return out;
+  }
+};
+
+const Identity={
+  A:['追光','雾中','慢门','胶片','逆光','林间','暖调','显影','银盐','午后','山野','深空','拾光','静物'],
+  B:['客','旅人','学徒','观察员','诗人','路过','拾光人','收藏家','手艺人','漫游者'],
+  nick:'',avatar:'',id:'',
+  gen(){return this.A[Math.random()*this.A.length|0]+this.B[Math.random()*this.B.length|0]},
+  genId(){return 'v_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10)},
+  init(){
+    try{
+      this.nick=localStorage.getItem('pt_nick')||'';
+      this.avatar=localStorage.getItem('pt_avatar')||'';
+      this.id=localStorage.getItem('pt_vid')||'';
+    }catch(e){}
+    if(!this.nick){this.nick=this.gen()}
+    if(!this.avatar){this.avatar=Avatar.list[Math.random()*Avatar.list.length|0].id}
+    if(!this.id){this.id=this.genId()}
+    this.save();
+  },
+  save(){
+    try{
+      localStorage.setItem('pt_nick',this.nick);
+      localStorage.setItem('pt_avatar',this.avatar);
+      localStorage.setItem('pt_vid',this.id);
+    }catch(e){}
+  },
+  /* 提交给后端的身份包 */
+  pack(){return {id:this.id,name:this.nick,avatar:this.avatar}},
+  setName(n){
+    const v=String(n||'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,24);
+    if(v)this.nick=v;
+    this.save();
+  },
+  setAvatar(id){if(Avatar.find(id))this.avatar=id;this.save()}
+};
+
+/* ─── 轻量事件总线:模块解耦(如上传完成 → archive:reload,Admin 不再直调 Store/Archive) ─── */
+const Bus={
+  m:{},
+  on(t,f){(this.m[t]=this.m[t]||[]).push(f)},
+  emit(t,d){return Promise.all((this.m[t]||[]).slice().map(f=>{try{return f(d)}catch(e){}}))}
+};
+
+/* ─── 互动:单张照片的点赞与评论(数据由后端存进腾讯云 COS) ─── */
+const Social={
+  data:{photos:{}},      /* 全站互动数据缓存 */
+  ready:false,           /* 是否已成功连上后端 */
+  g:null,p:null,         /* 当前悬浮窗正在看的照片 */
+  avatarsPainted:false,
+
+  /* 后端地址:同源部署时留空即可(相对路径);本地分离调试时可在 CONFIG 里改 */
+  base(){return (CONFIG.apiBase||'').replace(/\/+$/,'')},
+
+  /* 照片的稳定唯一标识:优先用 COS 对象 key,演示图用 日期#UnsplashID
+     未打开任何照片时(g/p 为空)返回空串,由调用方跳过绘制 */
+  key(g,p){
+    if(!p)return '';
+    return p.k||((g&&g.d)?(g.d+'#'+(p.u||p.t)):(p.u||p.t||'unknown'));
+  },
+
+  async init(){
+    Identity.init();
+    this.bindUI();
+    this.paintMe();
+    await this.load();
+  },
+
+  async call(path,opts){
+    const r=await fetch(this.base()+path,opts);
+    let j=null;
+    try{j=await r.json()}catch(e){}
+    if(!r.ok)throw new Error((j&&j.error)||('请求失败 '+r.status));
+    return j;
+  },
+
+  async load(){
+    try{
+      this.data=await this.call('/api/interactions');
+      if(!this.data||!this.data.photos)this.data={photos:{}};
+      this.ready=true;
+      this.setOffline(false);
+      this.refresh();
+    }catch(e){
+      this.ready=false;
+      this.setOffline(true);
+      /* 网络抖动/后端冷启动时自动重试,最多 4 次(2s/5s/10s/20s),不让互动区长期停摆 */
+      this._retry=(this._retry||0)+1;
+      if(this._retry<=4){
+        const wait=[2000,5000,10000,20000][this._retry-1];
+        setTimeout(()=>this.load(),wait);
+      }
+    }
+  },
+
+  /* 离线状态单独呈现:不占用评论区那行提示,避免与"已发布/失败"互相覆盖 */
+  setOffline(off){
+    this.offline=!!off;
+    const inp=$('#cmInput'),btn=$('#cmSend');
+    if(inp)inp.disabled=off;
+    if(btn)btn.disabled=off;
+    const lb=$('#likeBtn');
+    if(lb)lb.disabled=off;
+    const h=$('#cmHint');
+    if(h&&off&&!h.dataset.keep)h.textContent='互动功能正在连接中,稍候即可点赞留言…';
+    if(h&&!off&&!h.dataset.keep)h.textContent='';
+  },
+
+  /* 取某张照片的记录(总是返回可用对象,不改动缓存) */
+  rec(key){
+    const p=this.data.photos[key];
+    return {likes:(p&&p.likes)||[],comments:(p&&p.comments)||[]};
+  },
+
+  /* 当前访客是否已赞 */
+  isLiked(key){
+    return this.rec(key).likes.some(l=>l&&l.id===Identity.id);
+  },
+
+  /* ─── 悬浮窗切图时刷新互动区 ─── */
+  bind(g,p){
+    this.g=g;this.p=p;
+    this.refresh();
+    /* 输入框:属于「当前这张照片」,切图时清空防止误发到别的照片 */
+    const inp=$('#cmInput');
+    if(inp)inp.value='';
+  },
+
+  refresh(){
+    const key=this.key(this.g,this.p);
+    if(!key)return;
+    const rec=this.rec(key);
+    const liked=this.isLiked(key);
+
+    /* 变更检测:数据没变就整段跳过 DOM 操作
+       (切图时 refresh 会被调用,若每次都重建评论列表会白白引发重排) */
+    const sig=key+'|'+(liked?'1':'0')+'|'+rec.likes.length+'|'+rec.comments.length+
+      '|'+(rec.comments.length?rec.comments[rec.comments.length-1].id:'')+
+      '|'+Identity.nick+'|'+Identity.avatar;
+    if(sig===this._sig)return;
+    this._sig=sig;
+
+    const btn=$('#likeBtn');
+    if(btn){
+      btn.classList.toggle('on',liked);
+      btn.setAttribute('aria-pressed',liked?'true':'false');
+      btn.setAttribute('aria-label',liked?'取消点赞':'点赞这张照片');
+    }
+    const cnt=$('#likeCount');
+    if(cnt)cnt.textContent=String(rec.likes.length);
+
+    this.paintFaces(rec.likes);
+    this.paintComments(key,rec.comments);
+    this.paintMe();
+  },
+
+  /* 谁赞了:最多显示 6 个小头像,超出显示 +N */
+  paintFaces(likes){
+    const box=$('#likeFaces');
+    if(!box)return;
+    const list=(likes||[]).slice(-6).reverse();
+    let html=list.map(l=>`<span class="lf" title="${esc(l.name||'')}">${Avatar.svg(l.avatar,22)}</span>`).join('');
+    const more=(likes||[]).length-list.length;
+    if(more>0)html+=`<span class="lf-more">+${more}</span>`;
+    box.innerHTML=html;
+  },
+
+  /* 评论列表 */
+  paintComments(key,comments){
+    const box=$('#cmList'),cnt=$('#cmCount');
+    if(cnt)cnt.textContent=String((comments||[]).length);
+    if(!box)return;
+    if(!comments||!comments.length){
+      box.innerHTML='<div class="cm-empty">还没有人留言。<br>来说说你对这张照片的感受吧。</div>';
+      return;
+    }
+    box.innerHTML=comments.slice().reverse().map(c=>{
+      const mine=c.visitorId===Identity.id;
+      return `<div class="cm-item" data-id="${esc(c.id)}">
+        <span class="cm-av">${Avatar.svg(c.avatar,28)}</span>
+        <div class="cm-body">
+          <div class="cm-top">
+            <span class="cm-name">${esc(c.name||'匿名的追光者')}</span>
+            <span class="cm-time">${this.ago(c.ts)}</span>
+            ${mine?'<span class="cm-del" data-act="del">删除</span>':''}
+          </div>
+          <div class="cm-text">${esc(c.text||'')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  /* 相对时间 */
+  ago(ts){
+    const d=Date.now()-(ts||0);
+    if(d<60000)return '刚刚';
+    if(d<3600000)return Math.floor(d/60000)+' 分钟前';
+    if(d<86400000)return Math.floor(d/3600000)+' 小时前';
+    if(d<2592000000)return Math.floor(d/86400000)+' 天前';
+    const dt=new Date(ts);
+    return (dt.getMonth()+1)+'月'+dt.getDate()+'日';
+  },
+
+  /* 身份条 */
+  paintMe(){
+    const av=$('#meAv'),nm=$('#meName');
+    if(av)av.innerHTML=Avatar.svg(Identity.avatar,26);
+    if(nm)nm.textContent=Identity.nick;
+    const gi=$('#avGrid');
+    if(gi&&!this.avatarsPainted){
+      gi.innerHTML=Avatar.list.map(a=>
+        `<span class="av-opt${a.id===Identity.avatar?' sel':''}" data-av="${a.id}" title="选择这个头像">${Avatar.svg(a.id,40)}</span>`
+      ).join('');
+      this.avatarsPainted=true;
+    }
+    const grid=$('#avGrid');
+    if(grid){
+      grid.querySelectorAll('.av-opt').forEach(el=>{
+        el.classList.toggle('sel',el.dataset.av===Identity.avatar);
+      });
+    }
+    const mi=$('#meInput');
+    if(mi&&document.activeElement!==mi)mi.value=Identity.nick;
+  },
+
+  /* 操作反馈提示(发送中/已发布/失败)。离线连接提示由 setOffline 单独管理,两者不互相覆盖 */
+  setHint(t,err){
+    const h=$('#cmHint');
+    if(!h)return;
+    if(t){
+      h.dataset.keep='1';          /* 有真实反馈时,接管这一行 */
+      h.textContent=t;
+      h.classList.toggle('err',!!err);
+    }else{
+      delete h.dataset.keep;
+      /* 无反馈可显示时,若仍处离线态就恢复连接提示 */
+      h.textContent=this.offline?'互动功能正在连接中,稍候即可点赞留言…':'';
+      h.classList.toggle('err',false);
+    }
+  },
+
+  /* ─── 交互绑定(一次性) ─── */
+  bindUI(){
+    /* 点赞 */
+    const lb=$('#likeBtn');
+    if(lb&&!lb.dataset.bound){
+      lb.dataset.bound='1';
+      lb.addEventListener('click',()=>this.toggleLike());
+    }
+    /* 发送评论 */
+    const send=$('#cmSend');
+    if(send&&!send.dataset.bound){
+      send.dataset.bound='1';
+      send.addEventListener('click',()=>this.postComment());
+    }
+    const inp=$('#cmInput');
+    if(inp&&!inp.dataset.bound){
+      inp.dataset.bound='1';
+      inp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();this.postComment()}
+      });
+      /* 输入时自动长高(不超过 110px) */
+      inp.addEventListener('input',()=>{
+        inp.style.height='auto';
+        inp.style.height=Math.min(110,Math.max(42,inp.scrollHeight))+'px';
+      });
+    }
+    /* 身份编辑面板开关 */
+    const ed=$('#meEdit');
+    if(ed&&!ed.dataset.bound){
+      ed.dataset.bound='1';
+      ed.addEventListener('click',()=>{
+        const pn=$('#mePanel');
+        if(!pn)return;
+        pn.hidden=!pn.hidden;
+        ed.textContent=pn.hidden?'改名字':'收起';
+        if(!pn.hidden){this.paintMe();const mi=$('#meInput');if(mi)mi.focus()}
+      });
+    }
+    /* 头像选择 */
+    const grid=$('#avGrid');
+    if(grid&&!grid.dataset.bound){
+      grid.dataset.bound='1';
+      grid.addEventListener('click',e=>{
+        const el=e.target.closest('.av-opt');
+        if(!el)return;
+        Identity.setAvatar(el.dataset.av);
+        this.paintMe();
+      });
+    }
+    /* 换个名字 */
+    const rb=$('#meRandom');
+    if(rb&&!rb.dataset.bound){
+      rb.dataset.bound='1';
+      rb.addEventListener('click',()=>{
+        const mi=$('#meInput');
+        if(mi)mi.value=Identity.gen();
+      });
+    }
+    /* 保存身份 */
+    const sv=$('#meSave');
+    if(sv&&!sv.dataset.bound){
+      sv.dataset.bound='1';
+      sv.addEventListener('click',()=>{
+        const mi=$('#meInput');
+        Identity.setName(mi?mi.value:Identity.nick);
+        this.paintMe();
+        const pn=$('#mePanel');
+        if(pn)pn.hidden=true;
+        const ed2=$('#meEdit');
+        if(ed2)ed2.textContent='改名字';
+        this.setHint('已保存你的名字与头像');
+        /* 名字/头像变了,已发的评论与点赞仍归属同一身份,只需重绘画像与列表 */
+        this.refresh();
+      });
+    }
+    /* 删除自己的评论 */
+    const list=$('#cmList');
+    if(list&&!list.dataset.bound){
+      list.dataset.bound='1';
+      list.addEventListener('click',e=>{
+        const d=e.target.closest('[data-act="del"]');
+        if(!d)return;
+        const item=d.closest('.cm-item');
+        if(item)this.deleteComment(item.dataset.id);
+      });
+    }
+    /* 失焦自动保存名字(体验更顺,不用特意点保存) */
+    const mi=$('#meInput');
+    if(mi&&!mi.dataset.blurBound){
+      mi.dataset.blurBound='1';
+      mi.addEventListener('blur',()=>{
+        if(mi.value.trim()&&mi.value.trim()!==Identity.nick){
+          Identity.setName(mi.value);
+          this.paintMe();
+        }
+      });
+    }
+  },
+
+  /* ─── 点赞 / 取消:乐观更新(点下去立刻亮,再与服务器对账) ─── */
+  async toggleLike(){
+    const key=this.key(this.g,this.p);
+    if(!key)return;
+    const btn=$('#likeBtn');
+    if(btn&&btn.dataset.busy)return;
+    if(btn)btn.dataset.busy='1';
+
+    /* ① 先改本地:界面即时响应,不等网络 */
+    const rec=this.data.photos[key]||(this.data.photos[key]={likes:[],comments:[]});
+    const wasLiked=rec.likes.some(l=>l&&l.id===Identity.id);
+    if(wasLiked){
+      rec.likes=rec.likes.filter(l=>!l||l.id!==Identity.id);
+    }else{
+      rec.likes.push({id:Identity.id,name:Identity.nick,avatar:Identity.avatar,ts:Date.now()});
+    }
+    this.refresh();
+    if(!wasLiked&&btn){
+      btn.classList.add('pop');
+      setTimeout(()=>btn.classList.remove('pop'),440);
+    }
+
+    /* ② 再与服务器对账:失败则回滚 */
+    try{
+      const r=await this.call('/api/like',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({key:key,visitor:Identity.pack()})
+      });
+      const cur=this.data.photos[key]||(this.data.photos[key]={likes:[],comments:[]});
+      const mine=cur.likes.filter(l=>l&&l.id===Identity.id);
+      if(r.liked){
+        /* 服务器认为已赞:本地若还没有(或有多条)就补正为一条 */
+        if(mine.length!==1){
+          cur.likes=cur.likes.filter(l=>!l||l.id!==Identity.id);
+          cur.likes.push({id:Identity.id,name:Identity.nick,avatar:Identity.avatar,ts:Date.now()});
+        }
+      }else{
+        cur.likes=cur.likes.filter(l=>!l||l.id!==Identity.id);
+      }
+      this.ready=true;
+      this.setOffline(false);
+      this._retry=0;
+      this.setHint('');
+      this.refresh();
+    }catch(e){
+      /* 回滚到点击前的状态 */
+      const cur=this.data.photos[key];
+      if(cur){
+        const has=cur.likes.some(l=>l&&l.id===Identity.id);
+        if(wasLiked&&!has){
+          cur.likes.push({id:Identity.id,name:Identity.nick,avatar:Identity.avatar,ts:Date.now()});
+        }else if(!wasLiked&&has){
+          cur.likes=cur.likes.filter(l=>!l||l.id!==Identity.id);
+        }
+      }
+      this.setHint('点赞没成功,请检查网络后重试',true);
+      this.refresh();
+    }finally{
+      if(btn)btn.dataset.busy='';
+    }
+  },
+
+  /* ─── 发表评论 ─── */
+  async postComment(){
+    const key=this.key(this.g,this.p);
+    if(!key)return;
+    const inp=$('#cmInput'),btn=$('#cmSend');
+    const text=(inp&&inp.value||'').trim();
+    if(!text){this.setHint('请先写点什么再发送',true);return}
+    if(btn)btn.disabled=true;
+    this.setHint('发送中…');
+    try{
+      const r=await this.call('/api/comment',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({key:key,visitor:Identity.pack(),text:text})
+      });
+      const rec=this.data.photos[key]||(this.data.photos[key]={likes:[],comments:[]});
+      rec.comments.push(r.comment);
+      this.ready=true;
+      this.setOffline(false);
+      if(inp){inp.value='';inp.style.height=''}
+      this.setHint('已发布');
+      setTimeout(()=>this.setHint(''),2200);
+      this.refresh();
+    }catch(e){
+      this.setHint('发送失败:'+e.message,true);
+    }finally{
+      if(btn)btn.disabled=false;
+    }
+  },
+
+  /* ─── 删除自己的评论(本地即时移除 + 后端记录) ─── */
+  async deleteComment(id){
+    const key=this.key(this.g,this.p);
+    if(!key||!id)return;
+    const rec=this.data.photos[key];
+    if(rec)rec.comments=rec.comments.filter(c=>!c||c.id!==id);
+    this.refresh();
+    try{
+      await this.call('/api/comment/delete',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({key:key,id:id,visitor:Identity.pack()})
+      });
+    }catch(e){
+      /* 后端未开启删除接口时,本地已移除即可(刷新后可能回来) */
+    }
+  }
+};
+
+/* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
+const Archive={
+  openYears:new Set(),openMonths:new Set(),openDays:new Set(),io:null,
+  init(){
+    /* 默认:最新年、最新月、最新日展开 */
+    const ys=YEARS();
+    if(!ys.length)return;
+    const y0=ys[0],m0=monthsOf(y0)[0],d0=daysOf(m0)[0].d;
+    this.openYears=new Set([y0]);
+    this.openMonths=new Set([m0]);
+    this.openDays=new Set([d0]);
+    this.render();
+    $('#barStat').textContent=`共 ${totalPhotos()} 张 · ${Store.groups.length} 组 · ${ys.length} 年`;
+    if(this._bound)return;   /* 二次调用(上传后刷新)只更新数据,不重复绑定 */
+    this._bound=true;
+    $('#years').addEventListener('click',e=>{
+      /* 外科手术式切换:只改类名/aria,不重建整树(整树重建=全量重排+图片重挂载,大归档点哪卡哪) */
+      const yh=e.target.closest('.year-head');
+      if(yh){
+        const sec=yh.closest('.year'),y=sec.dataset.year,open=!sec.classList.contains('open');
+        open?this.openYears.add(y):this.openYears.delete(y);
+        this._toggle(sec,open);return;
+      }
+      const mh=e.target.closest('.month-head');
+      if(mh){
+        const sec=mh.closest('.month'),ym=sec.dataset.ym,open=!sec.classList.contains('open');
+        open?this.openMonths.add(ym):this.openMonths.delete(ym);
+        this._toggle(sec,open);return;
+      }
+      const dh=e.target.closest('.day-head');
+      if(dh){
+        const sec=dh.closest('.day'),dd=sec.dataset.day,open=!sec.classList.contains('open');
+        open?this.openDays.add(dd):this.openDays.delete(dd);
+        if(open)this._openDay(sec);
+        this._toggle(sec,open);return;
+      }
+      /* 点小图 → 打开组详情子页面 */
+      const pf=e.target.closest('.proof');
+      if(pf){GroupPage.open(pf.dataset.day);return}
+    });
+    /* 键盘无障碍:印样图 Enter/Space 打开组详情 */
+    $('#years').addEventListener('keydown',e=>{
+      if(e.key!=='Enter'&&e.key!==' ')return;
+      const pf=e.target.closest('.proof');
+      if(pf){e.preventDefault();GroupPage.open(pf.dataset.day)}
+    });
+    $('#expandAll').addEventListener('click',()=>{
+      YEARS().forEach(y=>{
+        this.openYears.add(y);
+        monthsOf(y).forEach(m=>{
+          this.openMonths.add(m);
+          daysOf(m).forEach(g=>this.openDays.add(g.d));
+        });
+      });
+      this._applyAll(true);
+    });
+    $('#collapseAll').addEventListener('click',()=>{
+      this.openYears.clear();this.openMonths.clear();this.openDays.clear();
+      this._applyAll(false);
+    });
+    /* logo:回归首页;连点 5 次开管理面板 */
+    let brandTaps=0,brandTimer=null;
+    $('#brandHome').addEventListener('click',()=>{
+      brandTaps++;
+      clearTimeout(brandTimer);
+      brandTimer=setTimeout(()=>{brandTaps=0},800);
+      if(brandTaps>=5){brandTaps=0;Admin.open();return}
+      if(!$('#groupPage').hidden){GroupPage.close()}
+      window.scrollTo({top:0,behavior:document.documentElement.classList.contains('lite')?'auto':'smooth'});
+    });
+  },
+  render(){
+    const box=$('#years');
+    box.innerHTML='';
+    YEARS().forEach(y=>{
+      const ygs=Store.groups.filter(g=>g.d.startsWith(y));
+      const yPhotos=ygs.reduce((s,g)=>s+g.gs.length,0);
+      const yOpen=this.openYears.has(y);
+      const sec=document.createElement('section');
+      sec.className='year'+(yOpen?' open':'');
+      sec.dataset.year=y;
+      sec.innerHTML=`
+        <button class="year-head" aria-expanded="${yOpen}">
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+          <span class="y">${y}</span>
+          <span class="yc">${ygs.length} 组 · ${yPhotos} 张</span>
+          <span class="rule"></span>
+        </button>
+        <div class="year-body"><div class="year-inner">${
+          monthsOf(y).map(ym=>{
+            const mgs=daysOf(ym);
+            const mPhotos=mgs.reduce((s,g)=>s+g.gs.length,0);
+            const mOpen=this.openMonths.has(ym);
+            return `
+            <section class="month${mOpen?' open':''}" data-ym="${ym}">
+              <button class="month-head" aria-expanded="${mOpen}">
+                <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                <span class="m">${ym.slice(5)}月</span>
+                <span class="mc">${mgs.length} 组 · ${mPhotos} 张</span>
+                <span class="rule"></span>
+                <span class="hint">${mOpen?'收起':'展开'}</span>
+              </button>
+              <div class="month-body"><div class="month-inner">${
+                mgs.map(g=>{
+                  const dOpen=this.openDays.has(g.d);
+                  const dd=g.d.slice(8);
+                  return `
+                  <section class="day${dOpen?' open':''}" data-day="${g.d}">
+                    <button class="day-head" aria-expanded="${dOpen}">
+                      <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                      <span class="d">${dd}日</span>
+                      <span class="d-cn">周${dayCn(g.d)}</span>
+                      <span class="dc">${g.gs.length} 张</span>
+                      <span class="loc">${esc(g.loc)}</span>
+                      <span class="rule"></span>
+                      <span class="hint">${dOpen?'收起':'展开预览'}</span>
+                    </button>
+                    <div class="day-body"><div class="day-inner">${
+                      dOpen?`<div class="contact-sheet">${g.gs.map((p,i)=>this.proofHTML(g,p,i)).join('')}</div>`
+                           :`<div class="day-collapsed">已收起 · 点击展开预览这组 ${g.gs.length} 张</div>`
+                    }</div></div>
+                  </section>`;
+                }).join('')
+              }</div></div>
+            </section>`;
+          }).join('')
+        }</div></div>`;
+      box.appendChild(sec);
+    });
+    /* 标记初始已展开的日(其印样已在 render 内构建),避免收起再展开时重复注入 */
+    box.querySelectorAll('.day.open .day-inner').forEach(di=>di.dataset.built='1');
+    this.observe();
+  },
+  proofHTML(g,p,i){
+    return `
+    <figure class="proof" data-day="${g.d}" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${p.t}">
+      <span class="pf-num">${String(i+1).padStart(2,'0')}</span>
+      <img src="${pURL(p,300)}" alt="${p.t}" loading="lazy" decoding="async">
+    </figure>`;
+  },
+  /* 展开状态外科手术:只切类名 + aria + 提示文案,零 DOM 重建 */
+  _toggle(sec,open){
+    sec.classList.toggle('open',open);
+    const head=sec.querySelector('.year-head,.month-head,.day-head');
+    if(!head)return;
+    head.setAttribute('aria-expanded',open?'true':'false');
+    const hint=head.querySelector('.hint');
+    if(hint)hint.textContent=sec.classList.contains('day')?(open?'收起':'展开预览'):(open?'收起':'展开');
+  },
+  /* 按需注入当日印样:只构建被点开的那一天(首次),之后收起再开是纯类名切换,秒开 */
+  _openDay(sec){
+    const inner=sec.querySelector('.day-inner');
+    if(!inner||inner.dataset.built)return;
+    const g=Store.groups.find(x=>x.d===sec.dataset.day);
+    if(!g)return;
+    inner.innerHTML=`<div class="contact-sheet">${g.gs.map((p,i)=>this.proofHTML(g,p,i)).join('')}</div>`;
+    inner.dataset.built='1';
+    inner.querySelectorAll('.proof').forEach(c=>{
+      const img=c.querySelector('img');
+      if(img){
+        img.addEventListener('load',()=>img.classList.add('loaded'),{once:true});
+        if(img.complete&&img.naturalWidth)img.classList.add('loaded');
+      }
+      if(this.io)this.io.observe(c);else c.classList.add('in');
+    });
+  },
+  /* 全开/全收:年/月即时切类;展开时按帧分批注入各日,避免一次性长任务卡住主线程 */
+  _applyAll(open){
+    document.querySelectorAll('#years .year').forEach(ysec=>{
+      this._toggle(ysec,open);
+      ysec.querySelectorAll('.month').forEach(m=>this._toggle(m,open));
+      if(!open){ysec.querySelectorAll('.day').forEach(d=>this._toggle(d,false));return}
+      const days=[].slice.call(ysec.querySelectorAll('.day'));
+      let i=0;
+      const step=()=>{
+        days.slice(i,i+24).forEach(d=>{this._openDay(d);this._toggle(d,true)});
+        i+=24;
+        if(i<days.length)requestAnimationFrame(step);
+      };
+      step();
+    });
+  },
+  observe(){
+    if(this.io)this.io.disconnect();
+    document.querySelectorAll('.proof img').forEach(img=>{
+      img.addEventListener('load',()=>img.classList.add('loaded'),{once:true});
+      if(img.complete&&img.naturalWidth)img.classList.add('loaded');
+    });
+    /* 老内核无 IntersectionObserver → 跳过观察,直接显示 */
+    if(!('IntersectionObserver' in window)){
+      document.querySelectorAll('.proof').forEach(c=>c.classList.add('in'));
+      this.io=null;return;
+    }
+    this.io=new IntersectionObserver(es=>es.forEach(e=>{
+      if(e.isIntersecting){e.target.classList.add('in');this.io.unobserve(e.target)}
+    }),{rootMargin:'120px 0px',threshold:0});
+    document.querySelectorAll('.proof').forEach(c=>this.io.observe(c));
+  }
+};
+
+/* ─── 组详情子页面 ─── */
+const GroupPage={
+  el:null,previews:null,g:null,
+  init(){
+    this.el=$('#groupPage');
+    this.previews=$('#gpPreviews');
+    $('#gpBack').addEventListener('click',()=>this.close());
+    /* 预览图点击 → 打开悬浮窗 */
+    this.previews.addEventListener('click',e=>{
+      const item=e.target.closest('.gp-preview-item');
+      if(item)Lightbox.open(this.g,+item.dataset.idx);
+    });
+  },
+  open(day){
+    this.g=groupOf(day);
+    if(!this.g)return;
+    this.paint();
+    $('#archive').hidden=true;
+    this.el.hidden=false;
+    window.scrollTo({top:0,behavior:'instant'});
+    document.title=`${this.g.title} · Phototropic`;
+  },
+  close(){
+    this.el.hidden=true;
+    $('#archive').hidden=false;
+    document.title='Phototropic · 照片归档预览';
+  },
+  paint(){
+    const g=this.g;
+    const d=g.d.replace(/-/g,'/');
+    $('#gpDate').textContent=`${g.d.slice(0,4)} 年 ${g.d.slice(5,7)} 月 ${g.d.slice(8)} 日 · 周${dayCn(g.d)}`;
+    $('#gpTitle').textContent=g.title;
+    $('#gpLoc').textContent=g.loc;
+    /* 预览图网格:每张图片正下方带各自的相机参数(机身型号 + 参数),单张无则回退整组默认 */
+    this.previews.innerHTML=g.gs.map((p,i)=>`
+      <figure class="gp-preview-item" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
+        <span class="gp-num">${String(i+1).padStart(2,'0')}</span>
+        <div class="gp-thumb"><img src="${pURL(p,500)}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
+        ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
+      </figure>`).join('');
+    /* 图片懒加载动画 */
+    this.previews.querySelectorAll('img').forEach(img=>{
+      img.addEventListener('load',()=>img.classList.add('loaded'),{once:true});
+      if(img.complete&&img.naturalWidth)img.classList.add('loaded');
+    });
+    /* 绑定预览图点击 */
+    this.previews.querySelectorAll('.gp-preview-item').forEach((item,i)=>{
+      item.addEventListener('click',()=>Lightbox.open(this.g,i));
+      item.addEventListener('keydown',e=>{   /* 键盘无障碍:Enter/Space 打开悬浮窗 */
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();Lightbox.open(this.g,i)}
+      });
+    });
+  }
+};
+
+/* ─── EXIF 参数矩阵:把 "机身 · 镜头<br>56mm · f/1.4 · 1/500s · ISO 320" 结构化为光学仪表盘 ─── */
+/* 解析失败或字段缺失时自动退化为原文显示,任何输入都不丢信息 */
+const ExifCard={
+  render(html){
+    if(!html)return '';
+    const lines=String(html).split(/<br\s*\/?>/i).map(l=>l.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
+    if(!lines.length)return '';
+    const head=esc(lines[0]);
+    /* 第二行按 " · " 拆段,逐段精确匹配四要素 */
+    const segs=lines.length>1?lines.slice(1).join(' · ').split('·').map(s=>s.trim()).filter(Boolean):[];
+    const used=[],cells=[];
+    const take=(label,re)=>{
+      for(let i=0;i<segs.length;i++){
+        if(used[i])continue;
+        const m=segs[i].match(re);
+        if(m){used[i]=1;cells.push({l:label,v:esc(m[1])});return}
+      }
+    };
+    take('焦距',/^(\d+(?:\.\d+)?mm)$/);
+    take('光圈',/^(f\/\d+(?:\.\d+)?)$/i);
+    take('快门',/^((?:1\/)?\d+(?:\.\d+)?s)$/);
+    take('感光度',/^(ISO\s*\d+)$/i);
+    if(!cells.length)return `<div class="exm-head">${head}</div>`;   /* 无法结构化 → 仅头行 */
+    const note=segs.filter((s,i)=>!used[i]).join(' · ');
+    return `<div class="exm-head">${head}</div>`+
+      `<div class="exm-grid">${cells.map(c=>`<div class="exm-cell"><span class="exm-l">${c.l}</span><span class="exm-v">${c.v}</span></div>`).join('')}</div>`+
+      (note?`<div class="exm-note">${esc(note)}</div>`:'');
+  },
+  /* 紧凑版:首行=机身·镜头(相机型号),其余=参数。用于组详情页每张图下方的独立小卡片 */
+  compact(html){
+    if(!html)return '';
+    const lines=String(html).split(/<br\s*\/?>/i).map(l=>l.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
+    if(!lines.length)return '';
+    const head=lines.length>1?esc(lines[0]):'';          /* 有多行:首行为机身·镜头 */
+    const body=esc(lines[lines.length>1?1:0]);            /* 参数行 */
+    return `<div class="gp-exif-cap" title="${head||body}">`+
+      (head?`<span class="gp-ph">${head}</span>`:'')+
+      `<span class="gp-pb">${body}</span></div>`;
+  }
+};
+
+/* ─── 单图悬浮窗 ─── */
+/* ─── 移动端"长按保存"浮层(微信/QQ 等应用内浏览器无法触发下载,长按是唯一可靠方式) ─── */
+const SaveHint={
+  show(url,fallbackUrl,canDownload,fname){
+    this.close();
+    const ov=document.createElement('div');
+    ov.id='saveHint';
+    ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:9000;background:rgba(8,6,14,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+    const title=document.createElement('div');
+    title.textContent='保 存 原 图';
+    title.style.cssText='font-size:14px;font-weight:600;color:#fff;letter-spacing:.22em;margin-bottom:14px';
+    const box=document.createElement('div');
+    box.style.cssText='max-width:92vw;max-height:60vh;display:flex;align-items:center;justify-content:center';
+    const spin=document.createElement('div');
+    spin.textContent='原图加载中 …';
+    spin.style.cssText='font-family:var(--mono);font-size:11px;color:rgba(253,252,250,.55);letter-spacing:.1em;padding:70px 36px;border:1px dashed rgba(255,255,255,.22);border-radius:12px';
+    const img=document.createElement('img');
+    img.alt='长按这张图片即可保存';
+    img.referrerPolicy='no-referrer';
+    img.style.cssText='display:none;max-width:92vw;max-height:60vh;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,.12)';
+    img.onload=()=>{spin.style.display='none';img.style.display='block';tip.textContent='请长按上方图片 → 菜单中选「保存图片」';tip.style.animation='none'};
+    img.onerror=()=>{
+      if(fallbackUrl&&fallbackUrl!==url){img.src=fallbackUrl}
+      else{spin.textContent='原图加载失败,请点下方按钮打开'}
+    };
+    img.src=url;
+    box.appendChild(spin);box.appendChild(img);
+    const tip=document.createElement('p');
+    tip.textContent='正在加载原图,请稍候 …';
+    tip.style.cssText='margin-top:16px;font-size:13px;color:rgba(253,252,250,.9);text-align:center;line-height:1.9;letter-spacing:.05em;animation:savePulse 1.5s ease-in-out infinite';
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px;max-width:92vw';
+    const mkBtn=(txt,primary)=>{
+      const b=document.createElement('button');
+      b.textContent=txt;
+      b.style.cssText='padding:10px 20px;border-radius:999px;font-size:12px;letter-spacing:.1em;'+
+        (primary
+          ?'background:linear-gradient(135deg,var(--coral),var(--apricot));color:#fff;border:1px solid transparent'
+          :'background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.22)');
+      return b;
+    };
+    /* 新窗口打开原图:微信/QQ 会用自带图片查看器打开(里面同样可长按保存) */
+    const openBtn=mkBtn('新窗口打开原图');
+    openBtn.onclick=()=>{location.href=url};
+    row.appendChild(openBtn);
+    /* 非微信/QQ 手机浏览器:额外提供真正的文件下载 */
+    if(canDownload){
+      const dlBtn=mkBtn('直接下载',true);
+      dlBtn.onclick=async()=>{
+        try{
+          const res=await fetch(url,{mode:'cors'});
+          if(!res.ok)throw new Error(res.status);
+          const blob=await res.blob();
+          const objUrl=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.href=objUrl;a.download=fname||'photo.jpg';
+          document.body.appendChild(a);a.click();a.remove();
+          setTimeout(()=>URL.revokeObjectURL(objUrl),4000);
+        }catch(e){}
+      };
+      row.appendChild(dlBtn);
+    }
+    const closeBtn=mkBtn('关 闭');
+    closeBtn.onclick=()=>this.close();
+    row.appendChild(closeBtn);
+    ov.appendChild(title);ov.appendChild(box);ov.appendChild(tip);ov.appendChild(row);
+    document.body.appendChild(ov);
+  },
+  close(){const el=document.getElementById('saveHint');if(el&&el.parentNode)el.parentNode.removeChild(el)}
+};
+
+const Lightbox={
+  el:null,img:null,g:null,cur:0,
+  init(){
+    this.el=$('#lightbox');
+    const UA=navigator.userAgent||'';
+    this.mobile=/Android|iPhone|iPad|HarmonyOS|Mobile/i.test(UA)||(navigator.maxTouchPoints>1&&/Macintosh/i.test(UA));
+    /* 手机端按钮语义改为"保存"(微信/QQ 内无法直接下载) */
+    if(this.mobile){
+      const l=document.querySelector('#lbDownload .lb-btn-label');
+      if(l)l.textContent='保存原图';
+    }
+    this.img=$('#lbImg');
+    $('#lbClose').addEventListener('click',()=>this.close());
+    $('#lbPrev').addEventListener('click',()=>this.step(-1));
+    $('#lbNext').addEventListener('click',()=>this.step(1));
+    this.el.addEventListener('click',e=>{
+      if(e.target===this.el||e.target.classList.contains('lb-stage'))this.close();
+    });
+    addEventListener('keydown',e=>{
+      if(!this.el.classList.contains('open'))return;
+      if(e.key==='Escape')this.close();
+      if(e.key==='ArrowLeft')this.step(-1);
+      if(e.key==='ArrowRight')this.step(1);
+    });
+    $('#lbDownload').addEventListener('click',async()=>{
+      const p=this.g.gs[this.cur];
+      const url=pFull(p);
+      const btn=$('#lbDownload');
+      if(btn.classList.contains('busy'))return;
+      const UA=navigator.userAgent||'';
+      const mobile=this.mobile;
+      const inApp=/MicroMessenger|MQQBrowser|QQ\/|QZONE|Weibo|DingTalk|AlipayClient|baiduboxapp|snssdk|aweme|tieba/i.test(UA);
+      /* 文件名:组名_照片名_日期.jpg */
+      const fname=`${this.g.title}_${p.t}_${this.g.d.replace(/-/g,'')}.jpg`;
+      /* 手机统一走"长按保存"浮层:微信/QQ 内置浏览器无法触发文件下载,长按在所有手机浏览器都可用 */
+      if(mobile){
+        SaveHint.show(url,(this.img&&this.img.src)?this.img.src:null,!inApp,fname);
+        return;
+      }
+      /* 桌面:blob 下载 */
+      btn.classList.add('busy');
+      const label=btn.querySelector('.lb-btn-label');
+      const orig=label?label.textContent:'';
+      if(label)label.textContent='下载中…';
+      try{
+        const res=await fetch(url,{mode:'cors'});
+        if(!res.ok)throw new Error(res.status);
+        const blob=await res.blob();
+        const objUrl=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=objUrl;a.download=fname;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(objUrl),4000);
+      }catch(err){
+        /* 跨域或网络失败 → 新标签页打开手动保存 */
+        open(url,'_blank','noopener');
+      }finally{
+        btn.classList.remove('busy');
+        if(label)label.textContent=orig||'下载原图';
+      }
+    });
+    this.initZoom();
+  },
+  /* ─── 手势:双指缩放 · 双击放大 · 放大后单指平移 · 未放大横滑翻页 ─── */
+  /* 纯 transform 实现,不触碰 src,不拦截长按(长按保存原图链路不受影响) */
+  initZoom(){
+    const st=this.el.querySelector('.lb-stage');
+    if(!st||this._zoomBound)return;
+    this._zoomBound=true;
+    const img=this.img;
+    let s=1,x=0,y=0,mode=0,sx=0,sy=0,ox=0,oy=0,pd=0,ps=1,t0x=0,t0y=0,moved=false,lastT=0,lastX=0,lastY=0;
+    const clamp=()=>{
+      if(s<=1){s=1;x=0;y=0;return}
+      const mx=Math.max(0,img.offsetWidth*(s-1)/2),my=Math.max(0,img.offsetHeight*(s-1)/2);
+      x=Math.max(-mx,Math.min(mx,x));y=Math.max(-my,Math.min(my,y));
+    };
+    const apply=anim=>{
+      img.style.transition=anim?'transform .35s cubic-bezier(.22,1,.36,1)':'';
+      img.style.transform=s>1?'translate('+x+'px,'+y+'px) scale('+s+')':'';
+    };
+    this._zoomReset=()=>{s=1;x=0;y=0;apply(true)};
+    const zoomAt=(k,cx,cy)=>{          /* 以视口点为锚缩放 */
+      const r=img.getBoundingClientRect();
+      x+=(cx-(r.left+r.width/2))*(1-k);
+      y+=(cy-(r.top+r.height/2))*(1-k);
+      s=Math.max(1,Math.min(4,s*k));
+      clamp();apply(true);
+    };
+    st.addEventListener('touchstart',e=>{
+      if(e.touches.length===1){
+        mode=1;moved=false;
+        sx=e.touches[0].clientX;sy=e.touches[0].clientY;ox=x;oy=y;t0x=sx;t0y=sy;
+      }else if(e.touches.length===2){
+        mode=2;moved=true;
+        pd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+        ps=s;
+      }
+    },{passive:true});
+    st.addEventListener('touchmove',e=>{
+      if(!mode)return;
+      e.preventDefault();               /* 覆盖层内接管滚动/页面双击缩放 */
+      if(mode===1){
+        const dx=e.touches[0].clientX-sx,dy=e.touches[0].clientY-sy;
+        if(Math.abs(dx)>6||Math.abs(dy)>6)moved=true;
+        if(s>1){x=ox+dx;y=oy+dy;clamp();apply(false)}
+      }else if(mode===2&&e.touches.length===2){
+        const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+        if(pd>0){s=Math.max(1,Math.min(4,ps*d/pd));clamp();apply(false)}
+      }
+    },{passive:false});
+    st.addEventListener('touchend',e=>{
+      if(mode===1&&!moved&&e.changedTouches.length){
+        const cx=e.changedTouches[0].clientX,cy=e.changedTouches[0].clientY,now=Date.now();
+        if(now-lastT<300&&Math.abs(cx-lastX)<50&&Math.abs(cy-lastY)<50){   /* 双击:放大/复位 */
+          if(s>1)this._zoomReset();else zoomAt(2.5,cx,cy);
+          lastT=0;
+        }else{lastT=now;lastX=cx;lastY=cy}
+      }else if(mode===1&&moved&&s===1&&e.changedTouches.length){
+        const dx=e.changedTouches[0].clientX-t0x,dy=e.changedTouches[0].clientY-t0y;
+        if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5){               /* 横滑翻页 */
+          this.step(dx<0?1:-1);
+        }
+      }
+      if(!e.touches.length)mode=0;
+    });
+    /* 桌面:滚轮缩放 + 双击放大(触屏设备交给 touch,避免双触发) */
+    if(!('ontouchstart' in window)){
+      st.addEventListener('wheel',e=>{
+        e.preventDefault();
+        zoomAt(e.deltaY<0?1.18:0.85,e.clientX,e.clientY);
+      },{passive:false});
+      img.addEventListener('dblclick',e=>{
+        if(s>1)this._zoomReset();else zoomAt(2.5,e.clientX,e.clientY);
+      });
+    }
+  },
+  open(g,idx){
+    this.g=g;
+    this.cur=idx||0;
+    this.paint();
+    this.el.classList.add('open');
+    document.body.style.overflow='hidden';
+  },
+  close(){
+    this.el.classList.remove('open');
+    document.body.style.overflow='';
+    if(this._zoomReset)this._zoomReset();
+  },
+  step(d){this.cur=(this.cur+d+this.g.gs.length)%this.g.gs.length;this.paint()},
+  /* 原图就绪角标:告知用户当前长按/另存拿到的是预览还是原图 */
+  _q(txt,cls){
+    const el=$('#lbQuality');
+    if(!el)return;
+    el.textContent=txt;
+    el.className='lb-quality '+(cls||'');
+  },
+  paint(){
+    const g=this.g,p=g.gs[this.cur];
+    if(this._zoomReset)this._zoomReset();     /* 换图先复位缩放 */
+    this.img.alt=p.t;
+    $('#lbTitle').textContent=p.t;
+    $('#lbGroup').textContent=g.title;
+    $('#lbIdx').textContent=`${this.cur+1} / ${g.gs.length}`;
+    /* 相机参数:每张各自一份,结构化为光学仪表盘;该张未识别到时回退整组默认(兼容旧数据/演示数据) */
+    const exifHTML=p.exif||g.exif||'';
+    $('#lbExif').innerHTML=exifHTML?ExifCard.render(exifHTML):'—';
+    /* 介绍:优先显示这张照片房主写的介绍,未写则回退整组介绍 */
+    $('#lbCaption').textContent=(p.d&&p.d.trim())?p.d.trim():(g.c||'');
+    /* 互动区:切到这张照片的点赞与评论(数据来自 COS) */
+    Social.bind(g,p);
+    /* 渐进加载:先显示 1800px 预览(秒开),后台静默预载原图,
+       解码完成后(img.decode,旧内核自动回退直换)无缝替换 <img> 指向。
+       微信/QQ 内长按图片 →「保存图片」,浏览器保存的就是 <img> 当前 src,
+       因此替换完成后直接长按保存到的即原图,而非预览图 */
+    if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
+    const full=pFull(p);
+    const prev=pURL(p,document.documentElement.classList.contains('lite')?900:1800);
+    const stale=()=>this.g!==g||this.g.gs[this.cur]!==p;
+    this.img.src=prev;
+    if(full===prev){this._q('原图已就绪','ready');return}
+    this._q(this.mobile?'原图加载中 · 稍候再长按':'原图加载中 …','load');
+    const pre=new Image();
+    pre.referrerPolicy='no-referrer';
+    this._pre=pre;
+    pre.onload=()=>{
+      if(stale())return;
+      const swap=()=>{
+        if(stale())return;
+        this.img.src=full;   /* 原图已在缓存,替换瞬时完成 */
+        this._q(this.mobile?'原图已就绪 · 长按即可保存':'原图已就绪','ready');
+      };
+      /* decode():离屏解码完再上屏,避免大图切换瞬间主线程掉帧;旧内核无此 API 自动回退 */
+      if(pre.decode){pre.decode().then(swap).catch(swap)}else{swap()}
+    };
+    pre.onerror=()=>{if(!stale())this._q('原图暂不可用 · 长按仅为预览','fail')};
+    pre.src=full;
+  }
+};
+
+/* ─── EXIF 自动识别:纯前端解析 JPEG,无外部依赖 ─── */
+const Exif={
+  /* 读取文件 EXIF 原始标签(仅 JPEG;PNG/WebP/HEIC 返回 null) */
+  async read(file){
+    try{
+      if(!file)return null;
+      const isJpg=/image\/jpe?g/i.test(file.type)||/\.jpe?g$/i.test(file.name);
+      if(!isJpg)return null;
+      const buf=await new Promise((res,rej)=>{   /* FileReader 全兼容(Blob.arrayBuffer 需 Chrome 76+) */
+        const r=new FileReader();
+        r.onload=()=>res(r.result);
+        r.onerror=()=>rej(r.error||new Error('read fail'));
+        r.readAsArrayBuffer(file.slice(0,262144));   /* 前 256KB 足够容纳 EXIF */
+      });
+      const v=new DataView(buf);
+      if(v.byteLength<4||v.getUint16(0)!==0xFFD8)return null; /* JPEG SOI */
+      let off=2;
+      while(off+4<v.byteLength){
+        if(v.getUint8(off)!==0xFF)break;
+        const marker=v.getUint16(off);
+        if(marker>=0xFFD8&&marker<=0xFFD9||marker>=0xFF01&&marker<=0xFF0F)break; /* 无长度段 */
+        if(marker===0xFFDA)break;                        /* 图像数据开始,EXIF 只会更靠前 */
+        const size=v.getUint16(off+2);
+        if(marker===0xFFE1&&v.getUint32(off+4)===0x45786966){ /* APP1 "Exif\0\0" */
+          return this.tiff(v,off+10);
+        }
+        off+=2+size;
+      }
+      return null;
+    }catch(e){return null}
+  },
+  /* TIFF 头解析:返回标签字典 */
+  tiff(v,start){
+    if(start+8>v.byteLength)return null;
+    const bom=v.getUint16(start);
+    const le=bom===0x4949;
+    if(!le&&bom!==0x4D4D)return null;
+    const u16=p=>v.getUint16(p,le),u32=p=>v.getUint32(p,le);
+    const ifdOff=u32(start+4);
+    if(ifdOff<8||start+ifdOff+2>v.byteLength)return null;
+    const tags={};
+    const walk=(ptr)=>{
+      if(ptr<8||start+ptr+2>v.byteLength)return;
+      const n=u16(start+ptr);
+      let p=start+ptr+2;
+      for(let i=0;i<n&&p+12<=v.byteLength;i++,p+=12){
+        const tag=u16(p),type=u16(p+2),cnt=u32(p+4);
+        const sz=(type===3?2:type===4||type===9?4:type===5||type===10?8:type===2||type===1||type===7?1:0)*cnt;
+        if(!sz)continue;
+        const valP=sz<=4?p+8:start+u32(p+8);
+        if(valP+sz>v.byteLength)continue;
+        if(tag===0x8769){walk(u32(p+8));continue}          /* Exif 子 IFD */
+        if(tag===0x010F)tags.make=this.str(v,valP,cnt);
+        else if(tag===0x0110)tags.model=this.str(v,valP,cnt);
+        else if(tag===0xA434)tags.lens=this.str(v,valP,cnt);
+        else if(tag===0x829D)tags.fnum=this.rat(v,valP,le);
+        else if(tag===0x829A)tags.exp=this.rat(v,valP,le);
+        else if(tag===0x920A)tags.focal=this.rat(v,valP,le);
+        else if(tag===0xA405)tags.focal35=u16(valP);
+        else if(tag===0x8827)tags.iso=u16(valP);
+      }
+    };
+    walk(ifdOff);
+    return (tags.make||tags.model||tags.lens||tags.fnum||tags.exp||tags.focal||tags.iso)?tags:null;
+  },
+  str(v,p,cnt){let s='';for(let i=0;i<cnt-1;i++){const b=v.getUint8(p+i);if(!b)break;s+=String.fromCharCode(b)}return s.trim()},
+  rat(v,p,le){const a=v.getUint32(p,le),b=v.getUint32(p+4,le);return b?a/b:0},
+  /* 标签 → 展示字符串(与演示数据同格式) */
+  fmt(t){
+    if(!t)return '';
+    const mk=(t.make||'').replace(/\s+/g,' ').trim(),md=(t.model||'').replace(/\s+/g,' ').trim();
+    let cam=md||mk;                                            /* 默认用 Model */
+    if(mk&&md&&!md.toUpperCase().startsWith(mk.toUpperCase())&&mk.toLowerCase()!=='apple')cam=mk+' '+md;  /* "FUJIFILM"+"X-T5"→"FUJIFILM X-T5";大小写透明;Apple 例外 */
+    let lens=t.lens||'';
+    if(lens&&(lens.startsWith(cam)||cam.startsWith(lens)))lens='';   /* iPhone 等机身镜头同名 */
+    const head=[cam,lens].filter(Boolean).join(' · ');
+    const parts=[];
+    /* 实际焦距(≥10mm 时展示;手机等超短焦改用 35mm 等效值更直观) */
+    let fl=0;
+    if(t.focal>=10)fl=Math.round(t.focal);
+    else if(t.focal35||t.focal)fl=Math.round(t.focal35||t.focal);
+    if(fl)parts.push(fl+'mm');
+    if(t.fnum){const f=Math.round(t.fnum*10)/10;parts.push('f/'+(f%1?f.toFixed(1):f))}
+    if(t.exp){
+      if(t.exp>=1)parts.push((Math.round(t.exp*10)/10)+'s');
+      else{const d=Math.round(1/t.exp);if(d>0)parts.push('1/'+d+'s')}
+    }
+    if(t.iso)parts.push('ISO '+t.iso);
+    const body=parts.join(' · ');
+    return head?(body?head+'<br>'+body:head):body;
+  }
+};
+
+/* ─── 背景音乐:黑胶唱片 · 访客默认静音,点击播放(尊重 autoplay 政策与访客意愿) ─── */
+const Player={
+  el:null,audio:null,tracks:[],i:0,_tipT:null,
+  cosURL(k){return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`},
+  async init(){
+    this.el=$('#disc');
+    if(!this.el||!CONFIG.cosBucket){if(this.el)this.el.hidden=true;return}
+    this.tracks=[];
+    try{
+      const r=await fetch(this.cosURL('music.json'),{cache:'no-store'});
+      if(r.ok){const j=await r.json();if(j&&Array.isArray(j.tracks))this.tracks=j.tracks.filter(t=>t&&t.k)}
+    }catch(e){}
+    if(!this.tracks.length){this.el.hidden=true;return}   /* 无曲目:唱片不出现 */
+    this.el.hidden=false;
+    if(this.audio){this.audio.pause();this.audio.src=''}  /* 重复 init(上传后刷新)先停旧实例 */
+    this.audio=new Audio();
+    this.audio.preload='none';                            /* 不播不下载,省访客流量 */
+    this.audio.addEventListener('ended',()=>{this.i=(this.i+1)%this.tracks.length;this.load(true);this.tip('♪ '+this.cur())});
+    this.audio.addEventListener('error',()=>{if(this.audio.src){this.el.classList.remove('playing');this.tip('播放失败,请稍后再试')}});
+    this.el.addEventListener('click',()=>this.toggle());
+    this.el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();this.toggle()}});
+    this.tip(this.tracks.length+' 首 · 点击播放');
+  },
+  load(autoplay){
+    const t=this.tracks[this.i];
+    if(!t)return;
+    this.audio.src=this.cosURL(t.k);
+    if(autoplay)this.audio.play().catch(()=>{});
+  },
+  toggle(){
+    if(!this.audio)return;
+    if(this.audio.paused){
+      if(!this.audio.src)this.load(false);
+      this.audio.play().then(()=>{
+        this.el.classList.add('playing');
+        this.tip('♪ '+this.cur());
+      }).catch(()=>{this.tip('浏览器拦截了播放,请再点一次')});
+    }else{
+      this.audio.pause();
+      this.el.classList.remove('playing');
+      this.tip('已暂停');
+    }
+  },
+  cur(){const t=this.tracks[this.i];return t?esc(t.t||'背景乐'):''},
+  tip(msg){
+    const b=$('#discTip');
+    if(!b)return;
+    b.innerHTML=msg;
+    b.classList.add('show');
+    clearTimeout(this._tipT);
+    this._tipT=setTimeout(()=>b.classList.remove('show'),2600);
+  }
+};
+
+/* ─── 管理面板:COS 密钥保存 + 照片直传 ─── */
+const Admin={
+  el:null,cos:null,_exifs:null,
+  init(){
+    this.el=$('#adminPanel');
+    $('#adminClose').addEventListener('click',()=>this.close());
+    $('#adminMask').addEventListener('click',()=>this.close());
+    /* 顶栏"管理"按钮已移除(站主要求):入口仅剩 网址#admin 与 logo 连点 5 次 */
+    addEventListener('hashchange',()=>{if(location.hash!=='#admin'&&!this.el.hidden)this.close()});
+    /* 密钥:本机 localStorage + 浏览器密码管理器双轨(像登录网站的"记住密码") */
+    $('#adminSid').value=this.getSid()||'';
+    $('#adminSkey').value=this.getSkey()||'';
+    $('#adminKeyForm').addEventListener('submit',ev=>{ev.preventDefault();this.saveKeys()});
+    $('#adminFillCreds').addEventListener('click',()=>this.fillKeys());
+    /* 日期默认今天(本地时区) */
+    const t=new Date();
+    $('#afDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    /* 上传提交 */
+    $('#adminForm').addEventListener('submit',ev=>{ev.preventDefault();this.upload()});
+    /* 标签页切换:同一时刻只显示一个功能页,避免长条滚动找功能 */
+    const tabs=$('#adminTabs');
+    if(tabs&&!tabs.dataset.bound){
+      tabs.dataset.bound='1';
+      tabs.addEventListener('click',ev=>{
+        const b=ev.target.closest('.atab');
+        if(b)this.tab(b.dataset.tab);
+      });
+    }
+    /* 站点发布:上传首页 + 开启 COS 静态网站 */
+    $('#adminPublish').addEventListener('click',()=>this.publishSite());
+    /* 背景音乐上传 */
+    $('#musicUpload').addEventListener('click',()=>this.uploadMusic());
+    /* 选照片后自动识别 EXIF 相机参数 */
+    $('#afFiles').addEventListener('change',()=>this.autofillExif());
+    /* 已上传照片管理:载入 + 列表事件委托(删/换/介绍失焦保存/缩略图新标签打开) */
+    $('#manageLoad').addEventListener('click',()=>this.loadManage());
+    const mg=$('#mgList');
+    mg.addEventListener('click',ev=>{
+      const b=ev.target.closest('.mg-btn,.mg-thumb');
+      if(!b)return;
+      if(b.dataset.act==='open'){window.open(this.cosURL(b.dataset.k),'_blank','noopener');return}
+      const act=b.dataset.act;
+      if(act==='del'){
+        const ph=b.closest('.mg-ph');
+        this.mgDelete(ph.dataset.d,+ph.dataset.i);
+      }else if(act==='gdel'){
+        const gsec=b.closest('.mg-group');
+        this.mgDeleteGroup(gsec.dataset.d);
+      }
+    });
+    mg.addEventListener('change',ev=>{
+      if(!ev.target.classList.contains('mg-file'))return;
+      const ph=ev.target.closest('.mg-ph');
+      const f=ev.target.files&&ev.target.files[0];
+      ev.target.value='';   /* 允许连续选同一文件再次触发 */
+      if(f&&ph)this.mgReplace(ph.dataset.d,+ph.dataset.i,f);
+    });
+    mg.addEventListener('focusout',ev=>{
+      const ta=ev.target;
+      if(!ta.classList||!ta.classList.contains('mg-desc'))return;
+      /* 点进同组的按钮(删/换)时先让失焦保存跑完,避免保存覆盖后续操作后的数据 */
+      setTimeout(()=>{
+        const ph=ta.closest&&ta.closest('.mg-ph');
+        if(!ph||!document.contains(ta))return;   /* 行已被删除/重渲染,丢弃 */
+        this.mgDescSave(ph.dataset.d,+ph.dataset.i,ta.value);
+      },0);
+    });
+    /* 入口:hash */
+    if(location.hash==='#admin')this.open();
+  },
+  /* 逐张识别:每张照片各自读 EXIF,返回与文件同序的参数数组('' 表示未识别) */
+  async scanExif(files){
+    const out=[];
+    for(let i=0;i<files.length;i++){
+      const tags=await Exif.read(files[i]);
+      out.push(tags?Exif.fmt(tags):'');
+    }
+    return out;
+  },
+  /* 选片后:逐张识别并逐行展示每张各自的相机参数(参数按单张保存,不再整组共用) */
+  async autofillExif(){
+    const files=[...($('#afFiles').files||[])];
+    const list=$('#afExifList');
+    if(!files.length){list.hidden=true;list.innerHTML='';this._exifs=null;this.status();return}
+    this.status(`已选 ${files.length} 张 · 正在逐张识别相机参数 …`);
+    this._exifs=await this.scanExif(files);
+    const n=this._exifs.filter(Boolean).length;
+    /* HEIC/HEIF(iPhone 原生格式):浏览器普遍不能直接显示,提前预警 */
+    const isHeic=f=>f.type==='image/heic'||f.type==='image/heif'||/\.hei[cf]$/i.test(f.name||'');
+    const nHeic=files.filter(isHeic).length;
+    list.hidden=false;
+    list.innerHTML=files.map((f,i)=>`
+      <div class="af-exif-row">
+        <div class="af-exif-line">
+          <span class="af-exif-num">${String(i+1).padStart(2,'0')}</span>
+          <span class="af-exif-file" title="${esc(f.name)}">${esc(f.name)}</span>
+          <span class="af-exif-val${this._exifs[i]?'':' none'}">${isHeic(f)?'<span class="af-warn">HEIC · 多数浏览器无法显示,建议相册转 JPG 后再传</span><br>':''}${this._exifs[i]?this._exifs[i].replace(/<br>/g,' · '):'未识别 · 将显示整组默认'}</span>
+        </div>
+        <textarea class="af-desc" data-i="${i}" rows="2" maxlength="180" placeholder="给这张照片写句介绍(可选) · 会显示在悬浮窗里"></textarea>
+      </div>`).join('');
+    let m=`已选 ${files.length} 张 · `;
+    if(nHeic)m+=`<span class="no">${nHeic} 张为 HEIC 格式(建议转 JPG)</span> · `;
+    this.status(m+(n?`识别到 ${n} 张的参数,将按单张分别保存`:'未识别到参数(可能非 JPEG 或已被压缩去除),可填写整组默认'),n?'ok':'no');
+  },
+  getSid(){try{return localStorage.getItem('pt_cos_sid')||''}catch(e){return ''}},
+  getSkey(){try{return localStorage.getItem('pt_cos_skey')||''}catch(e){return ''}},
+  /* 保存密钥:写入本机 + 提示浏览器密码管理器记住(HTTPS 下会弹"保存密码?") */
+  async saveKeys(){
+    const sid=$('#adminSid').value.trim(),skey=$('#adminSkey').value.trim();
+    if(!sid||!skey){this.status('密钥不完整','no');return}
+    try{localStorage.setItem('pt_cos_sid',sid);localStorage.setItem('pt_cos_skey',skey)}catch(e){}
+    this.cos=null;   /* 强制下次用新密钥重建 COS 客户端 */
+    let tip='密钥已保存在本机';
+    try{
+      if(navigator.credentials&&window.PasswordCredential){
+        await navigator.credentials.store(new PasswordCredential({id:sid,password:skey,name:'Phototropic COS 密钥'}));
+        tip='密钥已保存 · 浏览器会弹出"记住密码"提示,下次可一键填充';
+      }else{
+        tip='密钥已保存在本机(当前浏览器不支持密码管理器联动,如微信内置浏览器)';
+      }
+    }catch(e){tip='密钥已保存在本机(需 HTTPS 环境浏览器才会弹出记住密码)'}
+    this.status(tip,'ok');
+  },
+  /* 从浏览器密码管理器带回密钥:同登录网站时弹出的账号选择器 */
+  async fillKeys(){
+    if(!navigator.credentials||!window.PasswordCredential){
+      this.status('当前环境不支持浏览器填充(微信内置浏览器 / 非 HTTPS)· 本机已保存的密钥不受影响','no');
+      return;
+    }
+    try{
+      const c=await navigator.credentials.get({password:true});
+      if(!c||!c.password){this.status('浏览器里还没有记住这组密钥 · 先填写并点"保存密钥"一次','no');return}
+      $('#adminSid').value=c.id||'';
+      $('#adminSkey').value=c.password||'';
+      this.status('已从浏览器带回密钥 · 点"保存密钥"写入本机','ok');
+    }catch(e){
+      this.status('浏览器填充已取消或暂不可用','no');
+    }
+  },
+  status(msg,cls){
+    $('#adminStatus').innerHTML=(CONFIG.cosBucket
+      ?`<span class="ok">COS 已配置</span> · ${CONFIG.cosBucket}<br>`
+      :`<span class="no">COS 未配置</span> · 请联系部署者填写 CONFIG<br>`)
+    +`当前数据源:${Store.remote?'<span class="ok">云端</span>':'演示数据'}<br>`
+    +`互动功能:<span id="srvState">检测中 …</span><br>`
+    +(this.getSid()?'<span class="ok">本机密钥已保存</span>':'<span class="no">本机密钥未保存</span>')
+    +(msg?`<br>${msg}`:'');
+    this.checkServer();
+  },
+  open(){
+    if(!this.el)return;
+    this.el.hidden=false;
+    document.body.style.overflow='hidden';
+    this.status();
+    location.hash='#admin';
+    /* 打开面板后台预取 COS SDK:等站主填好表单时已经就绪,首次上传无需等待下载 */
+    if(typeof COS==='undefined')this.loadSDK();
+    this.checkServer();
+    /* 密钥没填过就直接落到"站点设置",省得站主找;填过则停在常用的上传页 */
+    const needKey=!this.getSid()||!this.getSkey();
+    this.tab(needKey?'setup':'upload');
+  },
+  /* 切换功能页 */
+  tab(name){
+    if(!name)return;
+    const tabs=$('#adminTabs');
+    if(tabs){
+      tabs.querySelectorAll('.atab').forEach(b=>{
+        const on=b.dataset.tab===name;
+        b.classList.toggle('on',on);
+        b.setAttribute('aria-selected',on?'true':'false');
+      });
+    }
+    document.querySelectorAll('.apane').forEach(p=>{
+      p.classList.toggle('on',p.dataset.pane===name);
+    });
+    /* 切到管理页时若还没载入过,自动载入一次(省掉一次点击) */
+    if(name==='manage'&&!this.mgData)this.loadManage();
+  },
+  /* 检测互动后端是否可用(点赞/评论功能) */
+  async checkServer(){
+    const el=$('#srvState');
+    if(!el)return;
+    try{
+      const r=await fetch((CONFIG.apiBase||'')+'/api/health',{cache:'no-store'});
+      const j=await r.json();
+      const ok=j&&j.ok;
+      const cosOk=j&&j.cosConfigured;
+      el.innerHTML=ok
+        ?`<span class="ok">互动功能正常</span> · 数据存储:${cosOk?'腾讯云 COS':'本地文件(未配置密钥)'}`
+        :'<span class="no">互动功能异常</span>';
+    }catch(e){
+      el.innerHTML='<span class="no">互动功能连不上</span> · 点赞评论可能无法使用';
+    }
+  },
+  close(){
+    if(!this.el)return;
+    this.el.hidden=true;
+    document.body.style.overflow='';
+    if(location.hash==='#admin')history.replaceState(null,'',location.pathname);
+  },
+  /* 按需加载 COS SDK:SDK 有 156KB,而访客完全用不到(只有站主上传照片才需要),
+     所以不在 <head> 里同步加载,等真正要用(打开管理面板并填了密钥)时才拉取 */
+  _sdkPromise:null,
+  loadSDK(){
+    if(typeof COS!=='undefined')return Promise.resolve(true);
+    if(this._sdkPromise)return this._sdkPromise;
+    this._sdkPromise=new Promise(resolve=>{
+      const s=document.createElement('script');
+      s.src='https://unpkg.com/cos-js-sdk-v5@1/dist/cos-js-sdk-v5.min.js';
+      s.async=true;
+      s.onload=()=>resolve(true);
+      s.onerror=()=>{this._sdkPromise=null;resolve(false)};
+      document.head.appendChild(s);
+    });
+    return this._sdkPromise;
+  },
+  /* 取得 COS 客户端(异步:首次会先加载 SDK) */
+  async client(){
+    if(!CONFIG.cosBucket){this.status('COS 未配置,无法上传','no');return null}
+    const sid=this.getSid(),skey=this.getSkey();
+    if(!sid||!skey){this.status('请先填写并保存 COS 密钥','no');return null}
+    if(!this.cos){
+      const ok=await this.loadSDK();
+      if(!ok){this.status('COS SDK 加载失败,请检查网络后重试','no');return null}
+      this.cos=new COS({SecretId:sid,SecretKey:skey});
+    }
+    return this.cos;
+  },
+  put(key,body,onProg){
+    return new Promise((res,rej)=>{
+      this.cos.putObject({Bucket:CONFIG.cosBucket,Region:CONFIG.cosRegion,Key:key,Body:body,
+        onProgress:e=>onProg&&onProg(e)},(err,data)=>err?rej(err):res(data));
+    });
+  },
+  /* 删除云端对象(删除/替换照片时清理旧文件) */
+  del(key){
+    return new Promise((res,rej)=>{
+      this.cos.deleteObject({Bucket:CONFIG.cosBucket,Region:CONFIG.cosRegion,Key:key},err=>err?rej(err):res());
+    });
+  },
+  cosURL(k){return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`},
+  /* ─── 已上传照片管理:删除 / 替换单张,改单张介绍 ───
+     每次操作都从 COS 重读 data.json 再写回(不自用本地缓存),避免站主开两个窗口时互相覆盖;
+     操作完成后经事件总线 archive:reload 刷新前台,管理列表原地重渲染 */
+  async loadManage(){
+    /* 只读载入:公开读 data.json,无需密钥;删除/替换/保存时才要求密钥 */
+    const box=$('#mgList'),btn=$('#manageLoad');
+    btn.disabled=true;btn.textContent='载入中…';
+    box.hidden=false;box.innerHTML='<div class="mg-empty">正在读取云端归档 …</div>';
+    try{
+      let data={groups:[]};
+      try{
+        const r=await fetch(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'});
+        if(r.ok){const j=await r.json();if(j&&Array.isArray(j.groups))data=j}
+      }catch(e){}
+      this.mgData=data;
+      this.renderManage();
+    }catch(err){
+      box.innerHTML=`<div class="mg-empty">读取失败:${esc(err&&err.message?err.message:'未知错误')} · 请稍后重试</div>`;
+    }finally{
+      btn.disabled=false;btn.textContent='重新载入';
+    }
+  },
+  renderManage(){
+    const box=$('#mgList');
+    const data=this.mgData;
+    if(!data||!data.groups.length){box.innerHTML='<div class="mg-empty">云端归档为空 · 先在上方上传第一组照片</div>';return}
+    const gs=data.groups.filter(g=>g.gs&&g.gs.some(p=>p.k));
+    if(!gs.length){box.innerHTML='<div class="mg-empty">云端归档里没有已上传的照片(当前为演示数据)</div>';return}
+    box.innerHTML=gs.map(g=>{
+      const photos=g.gs.map((p,i)=>{
+        if(!p.k)return '';
+        const ex=(p.exif||'').replace(/<br>/g,' · ');
+        return `
+        <div class="mg-ph" data-d="${g.d}" data-i="${i}">
+          <img class="mg-thumb" src="${this.cosURL(p.k)}?imageMogr2/thumbnail/160x" alt="${esc(p.t||'')}" title="点击在新标签打开原图" data-act="open" data-k="${esc(p.k)}">
+          <div class="mg-main">
+            <div class="mg-line">
+              <span class="mg-num">${String(i+1).padStart(2,'0')}</span>
+              <span class="mg-t">${esc(p.t||'')}</span>
+              <span class="mg-exif" title="${esc(ex)}">${esc(ex)||'无参数'}</span>
+            </div>
+            <textarea class="mg-desc" rows="2" maxlength="180" placeholder="给这张照片写句介绍(可选) · 显示在悬浮窗,失焦自动保存">${esc(p.d||'')}</textarea>
+            <div class="mg-acts">
+              <label class="mg-btn" title="上传新照片文件替换这一张(会重新识别参数)">替换照片<input type="file" accept="image/*" class="mg-file" hidden></label>
+              <button type="button" class="mg-btn danger" data-act="del">删除这张</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return `
+      <div class="mg-group" data-d="${g.d}">
+        <div class="mg-g-head">
+          <span>${g.d}</span>
+          <span class="mg-g-title">${esc(g.title||'')}</span>
+          <span>${esc(g.loc||'')}</span>
+          <span>${g.gs.filter(p=>p.k).length}/${g.gs.length} 张</span>
+          <span class="mg-g-act"><button type="button" class="mg-btn danger" data-act="gdel">删除整组</button></span>
+        </div>
+        ${photos}
+      </div>`;
+    }).join('');
+  },
+  mgSave(okMsg){
+    return this.put('data.json',new Blob([JSON.stringify(this.mgData,null,1)],{type:'application/json'}))
+      .then(()=>Bus.emit('archive:reload'))
+      .then(()=>{this.renderManage();if(okMsg)this.status(okMsg,'ok')});
+  },
+  async mgDelete(d,i){
+    if(!await this.client())return;   /* 删除需密钥:client() 已提示"请先保存密钥" */
+    const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
+    if(!g||!g.gs[i]||!g.gs[i].k)return;
+    if(!confirm(`确定删除「${g.gs[i].t||d+' 第'+(i+1)+'张'}」?\n云端文件会一并移除,不可恢复。`))return;
+    this.status('删除中 …');
+    try{
+      await this.del(g.gs[i].k);
+      g.gs.splice(i,1);
+      if(!g.gs.length)this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+      await this.mgSave('已删除');
+    }catch(err){
+      this.status('删除失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
+      this.renderManage();
+    }
+  },
+  async mgDeleteGroup(d){
+    if(!await this.client())return;
+    const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
+    if(!g)return;
+    if(!confirm(`确定删除整组「${g.title||d}」(${g.gs.length} 张)?\n云端文件会一并移除,不可恢复。`))return;
+    this.status('删除整组中 …');
+    try{
+      for(const p of g.gs){if(p.k){try{await this.del(p.k)}catch(e){}}}
+      this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+      await this.mgSave('整组已删除');
+    }catch(err){
+      this.status('删除失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
+      this.renderManage();
+    }
+  },
+  async mgReplace(d,i,file){
+    if(!await this.client())return;
+    const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
+    if(!g||!g.gs[i])return;
+    if(!file)return;
+    const ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+    const key=`photos/${d}/${i+1}_${Date.now()}.${ext}`;
+    this.status(`替换中 · 正在上传 ${file.name} …`);
+    try{
+      /* 新文件重新识别参数(未识别则保留这张原参数) */
+      const ex=await this.scanExif([file]);
+      await this.put(key,file);
+      const old=g.gs[i].k;
+      g.gs[i].k=key;
+      if(ex&&ex[0])g.gs[i].exif=ex[0];
+      if(old&&old!==key){try{await this.del(old)}catch(e){}}   /* 新文件就位后才删旧文件,失败不阻断 */
+      await this.mgSave('照片已替换');
+    }catch(err){
+      this.status('替换失败:'+(err&&err.message?err.message:'请检查密钥/网络'),'no');
+      this.renderManage();
+    }
+  },
+  async mgDescSave(d,i,val){
+    if(!await this.client())return;
+    const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
+    if(!g||!g.gs[i])return;
+    const v=(val||'').trim();
+    if(v===((g.gs[i].d||'').trim()))return;   /* 未变化不写云端 */
+    g.gs[i].d=v;
+    try{
+      await this.mgSave(v?'介绍已保存':'介绍已清空');
+    }catch(err){
+      this.status('保存介绍失败:'+(err&&err.message?err.message:''),'no');
+    }
+  },
+  readFileText(f){
+    return new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=()=>rej(new Error('读取文件失败'));
+      r.readAsText(f);
+    });
+  },
+  /* ─── 站点发布:把当前页面源码存入 COS 的 index.html,作为一份云端备份 ───
+     线上正式页面由 GitHub + Render 托管,改完推送仓库约 40 秒自动生效;
+     这里存的一份是给站主留的"回到任意版本"用的底稿。 */
+  async publishSite(){
+    const cos=await this.client();
+    if(!cos)return;
+    const btn=$('#adminPublish'),out=$('#pubOut');
+    btn.disabled=true;btn.textContent='发布中…';
+    out.hidden=true;
+    try{
+      /* 1. 取页面源码:优先抓当前地址(须是完整源码而非运行后的 DOM),异常时回退手动选文件 */
+      let src='';
+      try{
+        const r=await fetch(location.href,{cache:'no-store'});
+        if(r.ok){
+          const t=await r.text();
+          if(t.indexOf('<!DOCTYPE html')>-1&&/Phototropic/i.test(t))src=t;
+        }
+      }catch(e){}
+      if(!src){
+        const f=$('#pfFile').files&&$('#pfFile').files[0];
+        if(f)src=await this.readFileText(f);
+      }
+      if(!src){this.status('未能取得页面源码:请点上方选择文件,选定 index.html 后再发布','no');return}
+      /* 2. 上传首页(显式 text/html,保证浏览器按网页渲染) */
+      this.status('正在上传首页 …');
+      await this.put('index.html',new Blob([src],{type:'text/html; charset=utf-8'}));
+      this.status('首页已存入云端','ok');
+      out.hidden=false;
+      out.innerHTML=`<b>首页备份已更新</b><br>已存入云存储的 index.html,作为页面源码的一份备份。<br>线上正式页面由 GitHub + Render 托管:把最新源码推送到仓库,约 40 秒后自动重新部署生效。`;
+    }catch(err){
+      this.status('发布失败:'+(err&&err.message?err.message:'请检查密钥与存储桶权限'),'no');
+      out.hidden=true;
+    }finally{
+      btn.disabled=false;btn.textContent='发布 / 更新首页';
+    }
+  },
+  prog(pct,txt){
+    $('#adminProg').hidden=false;
+    $('#adminProgBar').style.width=pct+'%';
+    $('#adminProgTxt').textContent=txt;
+  },
+  /* ─── 背景音乐上传:音频入 COS music/,曲目清单读写 music.json(与照片的 data.json 分离) ─── */
+  async uploadMusic(){
+    const cos=await this.client();
+    if(!cos)return;
+    const files=[...$('#mfFiles').files];
+    if(!files.length){this.status('请先选择音频文件','no');return}
+    const btn=$('#musicUpload');
+    btn.disabled=true;btn.textContent='上传中…';
+    try{
+      /* 1. 读现有 music.json(追加而非覆盖) */
+      let data={tracks:[]};
+      try{
+        const r=await fetch(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/music.json`,{cache:'no-store'});
+        if(r.ok){const j=await r.json();if(j&&Array.isArray(j.tracks))data=j}
+      }catch(e){}
+      /* 2. 逐个上传(失败重试 1 次,跳过坏文件,不毁整批) */
+      const fails=[];
+      for(let i=0;i<files.length;i++){
+        const f=files[i];
+        const ext=(f.name.split('.').pop()||'mp3').toLowerCase().replace(/[^a-z0-9]/g,'')||'mp3';
+        const key=`music/${Date.now()}_${i+1}.${ext}`;
+        let ok=false;
+        for(let a=0;a<2&&!ok;a++){
+          try{await this.put(key,f);ok=true}
+          catch(e){await new Promise(r=>setTimeout(r,800))}
+        }
+        if(ok)data.tracks.push({k:key,t:f.name.replace(/\.[^.]+$/,'').slice(0,40)||'背景乐'});
+        else fails.push(String(i+1));
+      }
+      if(!data.tracks.length)throw new Error('全部音频上传失败,请检查密钥/网络');
+      /* 3. 写回清单 */
+      await this.put('music.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+      this.status(`背景音乐已保存:曲库共 ${data.tracks.length} 首${fails.length?` · <span class="no">第 ${fails.join('、')} 个文件失败已跳过</span>`:''},访客页右下角即出现唱片`,fails.length?'no':'ok');
+      $('#mfFiles').value='';
+      Player.init();   /* 免刷新,唱片立即就位 */
+    }catch(err){
+      this.status('音乐上传失败:'+(err&&err.message?err.message:'请检查密钥与存储桶权限'),'no');
+    }finally{
+      btn.disabled=false;btn.textContent='上传背景音乐';
+    }
+  },
+  async upload(){
+    const cos=await this.client();
+    if(!cos)return;
+    const d=$('#afDate').value;
+    const title=$('#afTitle').value.trim();
+    const loc=$('#afLoc').value.trim()||'—';
+    const desc=$('#afDesc').value.trim()||'';
+    const exif=$('#afExif').value.trim()||'';
+    const files=[...$('#afFiles').files];
+    if(!d||!title||!files.length){this.status('日期、标题、照片为必填','no');return}
+    const btn=$('#adminSubmit');
+    btn.disabled=true;btn.textContent='上传中…';
+    try{
+      /* 1. 读现有 data.json(公有读直链) */
+      let data={groups:[]};
+      try{
+        const r=await fetch(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'});
+        if(r.ok){const j=await r.json();if(j&&Array.isArray(j.groups))data=j}
+      }catch(e){}
+      /* 2. 逐张识别参数(选片时已扫过则复用)+ 逐张上传,每张携带各自的 EXIF */
+      if(!this._exifs||this._exifs.length!==files.length){
+        this.prog(2,'识别相机参数 …');
+        this._exifs=await this.scanExif(files);
+      }
+      const gs=[];
+      /* 逐张介绍:上传面板里每张照片各有一条可填的说明文字(可选),随照片一并入库 */
+      const _dc={};
+      $('#afExifList').querySelectorAll('textarea.af-desc').forEach(td=>{const v=(td.value||'').trim();if(v)_dc[+td.dataset.i]=v});
+      /* 逐张上传:每张失败自动重试 1 次,仍失败则跳过继续,不让一张坏片/一次网络抖动毁掉整批
+         (data.json 只在循环结束后写,跳过的照片不入库,补传时同一日期会自动并入同组) */
+      const fails=[];
+      for(let i=0;i<files.length;i++){
+        const f=files[i];
+        const ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+        const key=`photos/${d}/${i+1}_${Date.now()}.${ext}`;
+        let ok=false;
+        for(let a=0;a<2&&!ok;a++){
+          this.prog(Math.round((i+a*0.3)/files.length*90),(a?`第 ${i+1} 张失败,重试中 …`:`上传照片 ${i+1}/${files.length}`));
+          try{await this.put(key,f);ok=true}
+          catch(e){await new Promise(r=>setTimeout(r,800))}   /* 间隔 0.8s 再试,避开瞬时限流 */
+        }
+        if(ok){
+          const ph={t:`${title} · ${String(i+1).padStart(2,'0')}`,k:key,exif:this._exifs[i]||''};
+          if(_dc[i])ph.d=_dc[i];
+          gs.push(ph);
+        }
+        else fails.push(String(i+1));
+      }
+      if(!gs.length)throw new Error('所有照片均上传失败,请检查密钥/存储桶/网络后重试');
+      /* 3. 更新组数据(同日期则追加照片) */
+      const exist=data.groups.find(g=>g.d===d);
+      if(exist){
+        exist.gs.push(...gs);
+        if(loc&&loc!=='—')exist.loc=loc;
+        if(title)exist.title=title;
+        if(desc)exist.c=desc;
+        if(exif)exist.exif=exif;
+      }else{
+        data.groups.unshift({d,loc,title,c:desc,exif,gs});
+      }
+      /* 4. 写回 data.json */
+      this.prog(95,'保存归档数据…');
+      await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+      this.prog(100,'完成');
+      this.status(`上传成功:${gs.length}/${files.length} 张已归入 ${d}`+(fails.length?` · <span class="no">第 ${fails.join('、')} 张失败已跳过,可单独补传</span>`:''),fails.length?'no':'ok');
+      $('#adminForm').reset();
+      $('#afDate').value=d;
+      this._exifs=null;
+      const xl=$('#afExifList');xl.hidden=true;xl.innerHTML='';
+      /* 5. 通过事件总线刷新归档(Admin 不直调 Store/Archive,模块解耦) */
+      await Bus.emit('archive:reload');
+    }catch(err){
+      this.status('上传失败:'+(err&&err.message?err.message:'请检查密钥/存储桶名/地域是否正确'),'no');
+    }finally{
+      btn.disabled=false;btn.textContent='上传这组照片';
+      setTimeout(()=>{$('#adminProg').hidden=true},2500);
+    }
+  }
+};
+
+/* ─── 启动 ─── */
+Social.init();   /* 访客身份(随机名字+头像) + 拉取点赞评论数据,内部先跑 Identity.init() */
+Store.setDemo();
+(async()=>{
+  await Store.init();   /* 远程 data.json 存在则替换演示数据 */
+  Archive.init();
+})();
+/* 事件总线:上传完成后由 Admin 发出 archive:reload,Store/Archive 自主监听刷新(模块解耦) */
+Bus.on('archive:reload',async()=>{
+  Store.groups=[];
+  await Store.init();
+  if(!Store.groups.length)Store.setDemo();   /* 远程 data.json 瞬时读取失败时回退演示数据,避免档案空白 */
+  Archive.init();
+});
+GroupPage.init();
+Lightbox.init();
+Admin.init();
+Player.init();   /* 有曲目才显示唱片;访客默认静音 */
+
+/* ─── 明暗主题切换(默认亮色 bright,选择本地记忆) ───
+   平滑方案:优先用 View Transitions API,从切换按钮处做圆形 clip-path 揭示新主题。
+   相比之前版本,针对重页面做三处根治:
+   ① 动画锁:动画进行中忽略连续点击,消除并发 View Transition 抢帧导致的卡顿;
+   ② 缩短到 460ms + 更软的缓动 cubic-bezier(.15,1,.3,1),消除僵硬感,并叠加极淡的淡入让揭示柔和;
+   ③ 快照 will-change 提升为独立合成层(见 CSS),避免逐帧重栅格化;
+   系统"减弱动态效果"或不支持时瞬时切换,避免卡顿 */
+(function(){
+  var root=document.documentElement,key='pt_theme',btn=$('#themeBtn');
+  function setTheme(t){
+    root.setAttribute('data-theme',t);
+    try{localStorage.setItem(key,t)}catch(e){}
+    if(btn)btn.setAttribute('aria-checked',t==='bright'?'true':'false');
+  }
+  var locked=false;   /* 动画锁:动画期间忽略新的点击,避免并发过渡抢帧 */
+  var veil=document.getElementById('ttVeil');
+  var _reduce=function(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches};
+  /* 系统"减弱动态效果"时瞬时切换(不播动画) */
+  function swapInstant(t){setTheme(t);}
+  function apply(t){
+    if(locked){return;}
+    if(_reduce()){swapInstant(t);return;}
+    locked=true;
+    var r=btn?btn.getBoundingClientRect():null,
+        x=r?(r.left+r.width/2):innerWidth/2,
+        y=r?(r.top+r.height/2):innerHeight/2,
+        d=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y))*2;   /* 遮罩直径=能盖住最远角 */
+    veil.style.width=veil.style.height=d+'px';
+    veil.style.left=x+'px'; veil.style.top=y+'px';
+    /* 遮罩颜色 = 目标主题的氛围(先设好,此刻 opacity=0 不可见) */
+    veil.style.background = t==='dark'
+      ? 'radial-gradient(circle at 50% 35%,rgba(43,196,164,.32),rgba(124,94,220,.16) 46%,rgba(8,16,12,.98) 74%)'
+      : 'radial-gradient(circle at 50% 35%,rgba(14,159,131,.24),rgba(122,150,255,.14) 46%,rgba(250,248,242,.99) 74%)';
+    veil.style.transition='none';
+    veil.style.opacity='1';
+    veil.style.transform='translate(-50%,-50%) scale(0)';
+    void veil.offsetWidth;                        /* 提交起始态 */
+    /* 只动 transform:scale —— GPU 合成,不触发整页重绘,任何内核都顺滑 */
+    veil.style.transition='transform .26s cubic-bezier(.32,.72,.38,1)';
+    veil.style.transform='translate(-50%,-50%) scale(1)';
+    setTimeout(function(){
+      setTheme(t);                                /* 遮罩盖满屏幕后在其背后瞬时换肤,掉帧被挡住 */
+      requestAnimationFrame(function(){
+        veil.style.transition='opacity .2s ease';
+        veil.style.opacity='0';                   /* 只动 opacity —— 同为此例合成,平滑揭示新主题 */
+        setTimeout(function(){
+          veil.style.transition='none';           /* 归位复用 */
+          veil.style.opacity='0';
+          veil.style.transform='translate(-50%,-50%) scale(0)';
+          locked=false;
+        },240);
+      });
+    },270);
+  }
+  var saved='bright';
+  try{saved=localStorage.getItem(key)||'bright'}catch(e){}
+  setTheme(saved==='dark'?'dark':'bright');   /* 首帧直接落位,不播动画(避免首屏闪一下) */
+  if(btn)btn.addEventListener('click',function(){
+    apply(root.getAttribute('data-theme')==='bright'?'dark':'bright');
+  });
+})();  /* 主题 IIFE 结束 */
+
+})();  /* 主应用 IIFE 结束 */
+</script>
+</body>
+</html>
