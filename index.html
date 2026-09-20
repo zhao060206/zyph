@@ -237,6 +237,13 @@ html.lite .gp-preview-item,html.lite .proof{animation:none!important;transition:
 .proof:hover img.loaded{transform:scale(1.07)}
 .proof .pf-num{position:absolute;top:5px;left:5px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:rgba(255,255,255,.55);background:rgba(0,0,0,.4);padding:2px 5px;border-radius:4px;backdrop-filter:blur(4px)}
 .day-collapsed{padding:6px 4px 10px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--text-faint)}
+/* 空组在归档树里的入口:一眼看出这组还没照片,但点得进去 */
+.day-blank{margin:6px 0 2px;padding:20px 16px;text-align:center;cursor:pointer;border-radius:12px;
+  border:1px dashed rgba(255,255,255,.16);background:rgba(255,255,255,.02);
+  transition:border-color .3s,background .3s}
+.day-blank:hover{border-color:rgba(255,209,102,.42);background:rgba(255,209,102,.05)}
+.day-blank .db-t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--text-faint)}
+.day-blank:hover .db-t{color:var(--sun)}
 
 /* ═══════ 组详情子页面 ═══════ */
 .group-page{min-height:100vh;padding:80px 0 60px;padding-top:calc(80px + constant(safe-area-inset-top));padding-top:calc(80px + env(safe-area-inset-top));padding-bottom:calc(60px + constant(safe-area-inset-bottom));padding-bottom:calc(60px + env(safe-area-inset-bottom));animation:gpFade .5s both}
@@ -255,6 +262,25 @@ html.lite .gp-preview-item,html.lite .proof{animation:none!important;transition:
   background:linear-gradient(120deg,var(--coral),var(--apricot),var(--sun));
   -webkit-background-clip:text;background-clip:text;color:transparent}
 .gp-loc{font-family:var(--sans);font-size:14px;font-weight:300;color:var(--text-dim);margin-top:8px;letter-spacing:.08em}
+/* 整组介绍:归在这一组名下的文字,不是某一张照片的说明 */
+.gp-note{max-width:660px;margin:18px auto 0;font-family:var(--sans);font-size:13.5px;font-weight:300;
+  line-height:2;color:var(--text-dim);letter-spacing:.03em;white-space:pre-wrap;word-break:break-word}
+.gp-note::before{content:'';display:block;width:28px;height:1px;margin:0 auto 14px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent)}
+
+/* 空组态:这一组还没有照片时的占位,不显示空白页 */
+.gp-blank{max-width:1200px;margin:30px auto 0;padding:34px 24px;text-align:center;
+  border:1px dashed rgba(255,255,255,.16);border-radius:16px;background:rgba(255,255,255,.02)}
+.gp-blank-t{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--text-dim);letter-spacing:.1em}
+.gp-blank-d{margin-top:10px;font-family:var(--sans);font-size:12px;font-weight:300;line-height:1.9;
+  color:var(--text-faint);letter-spacing:.03em}
+
+/* 组留言:整组的公开讨论区,复用照片评论那套视觉 */
+.gp-talk{max-width:760px;margin:44px auto 0;padding:0 24px 60px}
+.gt-list{max-height:420px}
+.gp-talk .cm-list:empty{display:none}
+/* 组留言区里的身份提示(复用 .me-bar 外观,不给改名字入口) */
+.me-note{font-family:var(--mono);font-size:9px;color:var(--text-faint);letter-spacing:.1em;flex:none}
 
 /* 预览图区 */
 .gp-previews{max-width:1200px;margin:30px auto 0;padding:0 24px;
@@ -707,6 +733,11 @@ html[data-theme="bright"] .tn-fix-d b{color:#B57518}
 .mg-btn.danger:hover{background:rgba(255,94,91,.16);color:#ffb3a3}
 .mg-btn.busy{opacity:.45;pointer-events:none}
 .mg-empty{padding:18px 6px;text-align:center;font-family:var(--sans);font-size:12px;color:var(--text-faint);line-height:1.9}
+/* 空分组在管理列表里的占位 + 整组介绍输入框 */
+.mg-blank{margin:4px 0 0;padding:12px 14px;border-radius:10px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;color:var(--text-faint);border:1px dashed rgba(255,255,255,.14);background:rgba(255,255,255,.02)}
+.mg-gdesc{margin-top:8px}
+html[data-theme="bright"] .mg-blank{border-color:rgba(30,59,52,.20);background:rgba(14,159,131,.03)}
 html[data-theme="bright"] .mg-list{background:rgba(255,255,255,.55);border-color:rgba(30,59,52,.14)}
 html[data-theme="bright"] .mg-group+.mg-group{border-color:rgba(30,59,52,.12)}
 html[data-theme="bright"] .mg-ph+.mg-ph{border-color:rgba(30,59,52,.08)}
@@ -818,6 +849,11 @@ html[data-theme="dark"] .lb-stage .nav-btn:hover{background:linear-gradient(135d
 html[data-theme="dark"] .tool-btn{color:var(--text-dim);border-color:var(--border)}
 html[data-theme="dark"] .tool-btn:hover{color:var(--teal);border-color:rgba(43,196,164,.55)}
 html[data-theme="dark"] .gp-chip,html[data-theme="dark"] .gp-meta{color:var(--text-dim)}
+/* 组介绍分隔线 / 空组占位框:暗档用浅色描边 */
+html[data-theme="dark"] .gp-note::before{background:linear-gradient(90deg,transparent,rgba(170,225,205,.34),transparent)}
+html[data-theme="dark"] .gp-blank{border-color:rgba(170,225,205,.20);background:rgba(43,196,164,.04)}
+html[data-theme="dark"] .day-blank{border-color:rgba(170,225,205,.18);background:rgba(43,196,164,.04)}
+html[data-theme="dark"] .day-blank:hover{border-color:rgba(255,196,107,.5);background:rgba(255,196,107,.07)}
 html[data-theme="dark"] .disc:hover{box-shadow:0 10px 30px -6px rgba(43,196,164,.45),0 0 0 3px rgba(255,159,77,.3)}
 html[data-theme="dark"] ::selection{background:var(--teal);color:#06231A}
 html[data-theme="dark"] :focus-visible{outline-color:var(--teal)}
@@ -889,6 +925,11 @@ html[data-theme="bright"] .gp-back{background:rgba(255,255,255,.88);border-color
 html[data-theme="bright"] .gp-back:hover{background:#fff;color:var(--teal);border-color:rgba(14,159,131,.55)}
 html[data-theme="bright"] .tool-btn:hover{color:var(--teal);border-color:rgba(14,159,131,.55)}
 html[data-theme="bright"] .gp-chip,html[data-theme="bright"] .gp-meta{color:var(--text-dim)}
+/* 组介绍分隔线 / 空组占位框:亮档用深色描边,保证看得见 */
+html[data-theme="bright"] .gp-note::before{background:linear-gradient(90deg,transparent,rgba(30,59,52,.30),transparent)}
+html[data-theme="bright"] .gp-blank{border-color:rgba(30,59,52,.22);background:rgba(14,159,131,.04)}
+html[data-theme="bright"] .day-blank{border-color:rgba(30,59,52,.20);background:rgba(14,159,131,.03)}
+html[data-theme="bright"] .day-blank:hover{border-color:rgba(217,142,43,.5);background:rgba(217,142,43,.06)}
 /* 亮色下无参数占位框 / 悬浮窗 EXIF 虚线分隔 / 管理面板输入件的可读性补齐 */
 html[data-theme="bright"] .gp-noex{border-color:rgba(30,59,52,.22)}
 html[data-theme="bright"] .exm-cell{border-color:rgba(28,59,51,.16)}
@@ -995,10 +1036,41 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
       <h2 class="gp-title" id="gpTitle">雾锁钱塘</h2>
       <p class="gp-loc" id="gpLoc">杭州 · 钱塘江</p>
     </div>
+    <!-- 整组介绍:照片之外写给这一组的文字,空组也能有内容 -->
+    <p class="gp-note" id="gpNote" hidden></p>
   </div>
 
-  <!-- 预览图区 -->
+  <!-- 预览图区(空组时隐藏,由下面的空态占位) -->
   <div class="gp-previews" id="gpPreviews"></div>
+
+  <!-- 空组态:还没有照片的分组,仍可写介绍、留言 -->
+  <div class="gp-blank" id="gpBlank" hidden>
+    <div class="gp-blank-t">这一组还没有照片</div>
+    <div class="gp-blank-d">分组已经建好了 · 你可以先在这里写下这一组的想法或留言,照片以后再传。</div>
+  </div>
+
+  <!-- 组留言:针对"这一组"的整体讨论(与单张照片的评论分开存放) -->
+  <section class="gp-talk" id="gpTalk">
+    <div class="cm-head">
+      <span class="cm-title">组留言</span>
+      <span class="cm-count" id="gtCount">0</span>
+    </div>
+    <div class="cm-list gt-list" id="gtList"></div>
+    <div class="cm-form">
+      <div class="cm-form-row">
+        <textarea class="cm-input" id="gtInput" rows="2" maxlength="500" placeholder="对这一组说点什么…(回车发送)"></textarea>
+        <button class="cm-send" id="gtSend" type="button" aria-label="发送组留言">
+          <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+      <div class="cm-hint" id="gtHint"></div>
+      <div class="me-bar">
+        <span class="cm-av" id="gtMeAv"></span>
+        <span class="me-name" id="gtMeName">—</span>
+        <span class="me-note">留言会带上这个名字</span>
+      </div>
+    </div>
+  </section>
 </section>
 
 <!-- 单图悬浮窗 -->
@@ -1094,8 +1166,8 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
 
     <!-- ① 上传新照片(最高频,放第一位) -->
     <form class="admin-sec apane on" id="adminForm" data-pane="upload">
-      <div class="pane-intro">选好照片 → 填写日期和标题 → 点上传。相机参数会自动识别,不用手填。</div>
-      <div class="admin-field"><label>照片 · 可一次多选</label><input id="afFiles" type="file" accept="image/*" multiple required><span class="af-tip">若相册只能单选,可分多次提交:同一日期会自动并入同一组</span></div>
+      <div class="pane-intro">选好照片 → 填写日期和标题 → 点上传。相机参数会自动识别,不用手填。<br>不选照片只填日期和标题,就会建一个空分组(可以先写介绍、收留言,照片以后再传)。</div>
+      <div class="admin-field"><label>照片 · 可多选 · 不选则只建空分组</label><input id="afFiles" type="file" accept="image/*" multiple><span class="af-tip">若相册只能单选,可分多次提交:同一日期会自动并入同一组</span></div>
       <div class="af-exif-list" id="afExifList" hidden></div>
       <div class="admin-row2">
         <div class="admin-field"><label>拍摄日期 · 必填</label><input id="afDate" type="date" required></div>
@@ -1106,6 +1178,7 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
       <div class="admin-field"><label>整组通用相机参数 · 选填</label><input id="afExif" type="text" placeholder="单张没识别出参数时才用这个兜底,一般留空即可" maxlength="120"></div>
       <div class="admin-prog" id="adminProg" hidden><div class="admin-prog-bar" id="adminProgBar"></div><span id="adminProgTxt"></span></div>
       <button class="admin-btn admin-btn-primary admin-btn-lg" id="adminSubmit" type="submit">开始上传</button>
+      <button class="admin-btn admin-btn-lg" id="adminBlank" type="button">只建空分组(不选照片)</button>
     </form>
 
     <!-- ② 管理已有照片 -->
@@ -1531,6 +1604,7 @@ const Social={
   data:{photos:{}},      /* 全站互动数据缓存 */
   ready:false,           /* 是否已成功连上后端 */
   g:null,p:null,         /* 当前悬浮窗正在看的照片 */
+  talkG:null,            /* 当前组详情页正在看的组(组留言用) */
   avatarsPainted:false,
 
   /* 后端地址:同源部署时留空即可(相对路径);本地分离调试时可在 CONFIG 里改 */
@@ -1542,6 +1616,11 @@ const Social={
     if(!p)return '';
     return p.k||((g&&g.d)?(g.d+'#'+(p.u||p.t)):(p.u||p.t||'unknown'));
   },
+
+  /* 组的稳定唯一标识:留言挂在"这一组"上,与单张照片的评论分开存放。
+     日期是组的唯一键,加 grp: 前缀避免与照片 key(COS 路径)冲突。
+     空组照样有 key,所以没有照片的组也能留言 */
+  talkKey(g){return g&&g.d?('grp:'+g.d):''},
 
   async init(){
     Identity.init();
@@ -1565,6 +1644,8 @@ const Social={
       this.ready=true;
       this.setOffline(false);
       this.refresh();
+      /* 数据可能在组详情页打开着的时候才到位(冷启动重试),组留言区也要跟着刷新 */
+      if(this.talkG)this.refreshTalk();
     }catch(e){
       this.ready=false;
       this.setOffline(true);
@@ -1580,14 +1661,19 @@ const Social={
   /* 离线状态单独呈现:不占用评论区那行提示,避免与"已发布/失败"互相覆盖 */
   setOffline(off){
     this.offline=!!off;
+    /* 照片评论区与组留言区的输入控件一起管控 */
     const inp=$('#cmInput'),btn=$('#cmSend');
     if(inp)inp.disabled=off;
     if(btn)btn.disabled=off;
+    const gi=$('#gtInput'),gb=$('#gtSend');
+    if(gi)gi.disabled=off;
+    if(gb)gb.disabled=off;
     const lb=$('#likeBtn');
     if(lb)lb.disabled=off;
     const h=$('#cmHint');
     if(h&&off&&!h.dataset.keep)h.textContent='互动功能正在连接中,稍候即可点赞留言…';
     if(h&&!off&&!h.dataset.keep)h.textContent='';
+    this.setTalkHint('');   /* 组留言区的连接提示随之切换 */
   },
 
   /* 取某张照片的记录(总是返回可用对象,不改动缓存) */
@@ -1607,6 +1693,14 @@ const Social={
     this.refresh();
     /* 输入框:属于「当前这张照片」,切图时清空防止误发到别的照片 */
     const inp=$('#cmInput');
+    if(inp)inp.value='';
+  },
+
+  /* ─── 组详情页:绑定当前组,刷新组留言 ─── */
+  bindGroup(g){
+    this.talkG=g;
+    this.refreshTalk();
+    const inp=$('#gtInput');
     if(inp)inp.value='';
   },
 
@@ -1638,6 +1732,25 @@ const Social={
     this.paintMe();
   },
 
+  /* ─── 组留言区刷新:与照片评论同一套渲染,只是换了个 key 与容器 ─── */
+  refreshTalk(){
+    const g=this.talkG;
+    const key=this.talkKey(g);
+    if(!key)return;
+    const rec=this.rec(key);
+    const sig=key+'|'+rec.comments.length+
+      '|'+(rec.comments.length?rec.comments[rec.comments.length-1].id:'')+
+      '|'+Identity.nick+'|'+Identity.avatar;
+    if(sig===this._talkSig)return;
+    this._talkSig=sig;
+    this.paintComments(key,rec.comments,{list:'#gtList',count:'#gtCount',
+      empty:'还没有人在这里留言。<br>来说说你对这一组的感受吧。'});
+    /* 组留言区也显示当前身份(名字+头像),与照片评论区同一套来源 */
+    const av=$('#gtMeAv'),nm=$('#gtMeName');
+    if(av)av.innerHTML=Avatar.svg(Identity.avatar,26);
+    if(nm)nm.textContent=Identity.nick;
+  },
+
   /* 谁赞了:最多显示 6 个小头像,超出显示 +N */
   paintFaces(likes){
     const box=$('#likeFaces');
@@ -1649,13 +1762,17 @@ const Social={
     box.innerHTML=html;
   },
 
-  /* 评论列表 */
-  paintComments(key,comments){
-    const box=$('#cmList'),cnt=$('#cmCount');
+  /* 评论列表。第二组参数可指定挂载容器(组留言复用同一套渲染);
+     不传时沿用悬浮窗里的照片评论区 */
+  paintComments(key,comments,opt){
+    const o=opt||{};
+    const box=$(o.list||'#cmList'),cnt=$(o.count||'#cmCount');
     if(cnt)cnt.textContent=String((comments||[]).length);
     if(!box)return;
+    /* dataset.key 让删除按钮知道这条评论挂在哪(照片 key 还是组 key) */
+    box.dataset.key=key;
     if(!comments||!comments.length){
-      box.innerHTML='<div class="cm-empty">还没有人留言。<br>来说说你对这张照片的感受吧。</div>';
+      box.innerHTML=`<div class="cm-empty">${o.empty||'还没有人留言。<br>来说说你对这张照片的感受吧。'}</div>`;
       return;
     }
     box.innerHTML=comments.slice().reverse().map(c=>{
@@ -1809,6 +1926,33 @@ const Social={
         if(item)this.deleteComment(item.dataset.id);
       });
     }
+    /* ─── 组留言:发送 / 回车 / 删除,与照片评论同形,只是 key 换成组 key ─── */
+    const gsend=$('#gtSend');
+    if(gsend&&!gsend.dataset.bound){
+      gsend.dataset.bound='1';
+      gsend.addEventListener('click',()=>this.postTalk());
+    }
+    const ginp=$('#gtInput');
+    if(ginp&&!ginp.dataset.bound){
+      ginp.dataset.bound='1';
+      ginp.addEventListener('keydown',e=>{
+        if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();this.postTalk()}
+      });
+      ginp.addEventListener('input',()=>{
+        ginp.style.height='auto';
+        ginp.style.height=Math.min(110,Math.max(42,ginp.scrollHeight))+'px';
+      });
+    }
+    const glist=$('#gtList');
+    if(glist&&!glist.dataset.bound){
+      glist.dataset.bound='1';
+      glist.addEventListener('click',e=>{
+        const d=e.target.closest('[data-act="del"]');
+        if(!d)return;
+        const item=d.closest('.cm-item');
+        if(item)this.deleteComment(item.dataset.id,this.talkKey(this.talkG));
+      });
+    }
     /* 失焦自动保存名字(体验更顺,不用特意点保存) */
     const mi=$('#meInput');
     if(mi&&!mi.dataset.blurBound){
@@ -1885,15 +2029,26 @@ const Social={
     }
   },
 
-  /* ─── 发表评论 ─── */
+  /* ─── 发表评论 / 组留言:同一套提交流程,只有 key、输入框与刷新目标不同 ─── */
   async postComment(){
     const key=this.key(this.g,this.p);
+    return this._post(key,{inp:'#cmInput',btn:'#cmSend',hint:this.setHint.bind(this),after:()=>this.refresh()});
+  },
+
+  /* 组留言:key 用 grp:日期,留言挂在整组上(空组也能留) */
+  async postTalk(){
+    const key=this.talkKey(this.talkG);
+    return this._post(key,{inp:'#gtInput',btn:'#gtSend',
+      hint:(t,err)=>this.setTalkHint(t,err),after:()=>this.refreshTalk()});
+  },
+
+  async _post(key,ui){
     if(!key)return;
-    const inp=$('#cmInput'),btn=$('#cmSend');
+    const inp=$(ui.inp),btn=$(ui.btn);
     const text=(inp&&inp.value||'').trim();
-    if(!text){this.setHint('请先写点什么再发送',true);return}
+    if(!text){ui.hint('请先写点什么再发送',true);return}
     if(btn)btn.disabled=true;
-    this.setHint('发送中…');
+    ui.hint('发送中…');
     try{
       const r=await this.call('/api/comment',{
         method:'POST',
@@ -1905,23 +2060,32 @@ const Social={
       this.ready=true;
       this.setOffline(false);
       if(inp){inp.value='';inp.style.height=''}
-      this.setHint('已发布');
-      setTimeout(()=>this.setHint(''),2200);
-      this.refresh();
+      ui.hint('已发布');
+      setTimeout(()=>ui.hint(''),2200);
+      ui.after();
     }catch(e){
-      this.setHint('发送失败:'+e.message,true);
+      ui.hint('发送失败:'+e.message,true);
     }finally{
       if(btn)btn.disabled=false;
     }
   },
 
-  /* ─── 删除自己的评论(本地即时移除 + 后端记录) ─── */
-  async deleteComment(id){
-    const key=this.key(this.g,this.p);
+  /* 组留言区的连接/操作提示(与照片评论区的 setHint 分开,互不覆盖) */
+  setTalkHint(t,err){
+    const h=$('#gtHint');
+    if(!h)return;
+    h.textContent=t||(this.offline?'互动功能正在连接中,稍候即可留言…':'');
+    h.classList.toggle('err',!!err);
+  },
+
+  /* ─── 删除自己的评论(本地即时移除 + 后端记录)
+     talkKey 传入时删的是组留言,否则删当前照片的评论 ─── */
+  async deleteComment(id,talkKey){
+    const key=talkKey||this.key(this.g,this.p);
     if(!key||!id)return;
     const rec=this.data.photos[key];
     if(rec)rec.comments=rec.comments.filter(c=>!c||c.id!==id);
-    this.refresh();
+    if(talkKey)this.refreshTalk();else this.refresh();
     try{
       await this.call('/api/comment/delete',{
         method:'POST',
@@ -1973,12 +2137,17 @@ const Archive={
       /* 点小图 → 打开组详情子页面 */
       const pf=e.target.closest('.proof');
       if(pf){GroupPage.open(pf.dataset.day);return}
+      /* 点空组入口 → 同样进组详情页(可见介绍与留言区) */
+      const db=e.target.closest('.day-blank');
+      if(db){GroupPage.open(db.dataset.day);return}
     });
     /* 键盘无障碍:印样图 Enter/Space 打开组详情 */
     $('#years').addEventListener('keydown',e=>{
       if(e.key!=='Enter'&&e.key!==' ')return;
       const pf=e.target.closest('.proof');
-      if(pf){e.preventDefault();GroupPage.open(pf.dataset.day)}
+      if(pf){e.preventDefault();GroupPage.open(pf.dataset.day);return}
+      const db=e.target.closest('.day-blank');
+      if(db){e.preventDefault();GroupPage.open(db.dataset.day)}
     });
     $('#expandAll').addEventListener('click',()=>{
       YEARS().forEach(y=>{
@@ -2040,20 +2209,24 @@ const Archive={
                 mgs.map(g=>{
                   const dOpen=this.openDays.has(g.d);
                   const dd=g.d.slice(8);
+                  /* 空组也要能进详情页(那里能写介绍、留言),所以有照片才给预览网格,
+                     没照片则给一条"还没有照片 · 进去写点什么"的入口 */
+                  const n=g.gs?g.gs.length:0;
                   return `
-                  <section class="day${dOpen?' open':''}" data-day="${g.d}">
+                  <section class="day${dOpen?' open':''}${n?'':' day-empty'}" data-day="${g.d}">
                     <button class="day-head" aria-expanded="${dOpen}">
                       <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
                       <span class="d">${dd}日</span>
                       <span class="d-cn">周${dayCn(g.d)}</span>
-                      <span class="dc">${g.gs.length} 张</span>
+                      <span class="dc">${n?n+' 张':'暂无照片'}</span>
                       <span class="loc">${esc(g.loc)}</span>
                       <span class="rule"></span>
                       <span class="hint">${dOpen?'收起':'展开预览'}</span>
                     </button>
                     <div class="day-body"><div class="day-inner">${
-                      dOpen?`<div class="contact-sheet">${g.gs.map((p,i)=>this.proofHTML(g,p,i)).join('')}</div>`
-                           :`<div class="day-collapsed">已收起 · 点击展开预览这组 ${g.gs.length} 张</div>`
+                      dOpen?(n?`<div class="contact-sheet">${g.gs.map((p,i)=>this.proofHTML(g,p,i)).join('')}</div>`
+                             :this.blankHTML(g))
+                           :`<div class="day-collapsed">已收起 · 点击展开${n?'预览这组 '+n+' 张':'查看这一组'}</div>`
                     }</div></div>
                   </section>`;
                 }).join('')
@@ -2074,6 +2247,11 @@ const Archive={
       <img src="${pURL(p,300)}" alt="${p.t}" loading="lazy" decoding="async">
     </figure>`;
   },
+  /* 空组的展开态:一个能点进组详情页的入口(组详情页可写介绍与留言) */
+  blankHTML(g){
+    return `<div class="day-blank" data-day="${g.d}" tabindex="0" role="button"
+      aria-label="进入 ${esc(g.title||'')} 这一组"><span class="db-t">这一组还没有照片 · 进去写点什么</span></div>`;
+  },
   /* 展开状态外科手术:只切类名 + aria + 提示文案,零 DOM 重建 */
   _toggle(sec,open){
     sec.classList.toggle('open',open);
@@ -2089,6 +2267,13 @@ const Archive={
     if(!inner||inner.dataset.built)return;
     const g=Store.groups.find(x=>x.d===sec.dataset.day);
     if(!g)return;
+    /* 空组:注入可点进的入口,而不是空白网格
+       (点击由 #years 上的事件委托统一处理,这里不重复绑定) */
+    if(!g.gs||!g.gs.length){
+      inner.innerHTML=this.blankHTML(g);
+      inner.dataset.built='1';
+      return;
+    }
     inner.innerHTML=`<div class="contact-sheet">${g.gs.map((p,i)=>this.proofHTML(g,p,i)).join('')}</div>`;
     inner.dataset.built='1';
     inner.querySelectorAll('.proof').forEach(c=>{
@@ -2140,6 +2325,7 @@ const GroupPage={
   init(){
     this.el=$('#groupPage');
     this.previews=$('#gpPreviews');
+    this.blank=$('#gpBlank');
     $('#gpBack').addEventListener('click',()=>this.close());
     /* 预览图点击 → 打开悬浮窗 */
     this.previews.addEventListener('click',e=>{
@@ -2155,6 +2341,8 @@ const GroupPage={
     this.el.hidden=false;
     window.scrollTo({top:0,behavior:'instant'});
     document.title=`${this.g.title} · Phototropic`;
+    /* 组留言:进入这一组时加载并显示它的留言(空组也有) */
+    Social.bindGroup(this.g);
   },
   close(){
     this.el.hidden=true;
@@ -2163,10 +2351,21 @@ const GroupPage={
   },
   paint(){
     const g=this.g;
-    const d=g.d.replace(/-/g,'/');
     $('#gpDate').textContent=`${g.d.slice(0,4)} 年 ${g.d.slice(5,7)} 月 ${g.d.slice(8)} 日 · 周${dayCn(g.d)}`;
     $('#gpTitle').textContent=g.title;
     $('#gpLoc').textContent=g.loc;
+    /* 整组介绍:归在这一组名下的文字,没有就不占位置 */
+    const note=$('#gpNote');
+    if(note){
+      const c=(g.c||'').trim();
+      note.textContent=c;
+      note.hidden=!c;
+    }
+    /* 没有照片的组:隐藏空白网格,改显示说明,让"空组"看起来是刻意的状态而不是坏页 */
+    const empty=!g.gs||!g.gs.length;
+    if(this.blank)this.blank.hidden=!empty;
+    this.previews.hidden=empty;
+    if(empty){this.previews.innerHTML='';return}
     /* 预览图网格:每张图片正下方带各自的相机参数(机身型号 + 参数),单张无则回退整组默认 */
     this.previews.innerHTML=g.gs.map((p,i)=>`
       <figure class="gp-preview-item" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
@@ -2700,6 +2899,9 @@ const Admin={
     $('#afDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
     /* 上传提交 */
     $('#adminForm').addEventListener('submit',ev=>{ev.preventDefault();this.upload()});
+    /* 只建空分组:表单里不选照片也能建组 */
+    const abBtn=$('#adminBlank');
+    if(abBtn&&!abBtn.dataset.bound){abBtn.dataset.bound='1';abBtn.addEventListener('click',()=>this.blankGroup())}
     /* 标签页切换:同一时刻只显示一个功能页,避免长条滚动找功能 */
     const tabs=$('#adminTabs');
     if(tabs&&!tabs.dataset.bound){
@@ -2747,8 +2949,12 @@ const Admin={
       if(!ta.classList||!ta.classList.contains('mg-desc'))return;
       /* 点进同组的按钮(删/换)时先让失焦保存跑完,避免保存覆盖后续操作后的数据 */
       setTimeout(()=>{
-        const ph=ta.closest&&ta.closest('.mg-ph');
-        if(!ph||!document.contains(ta))return;   /* 行已被删除/重渲染,丢弃 */
+        const gs=ta.closest&&ta.closest('.mg-group');
+        if(!gs||!document.contains(ta))return;   /* 行已被删除/重渲染,丢弃 */
+        /* 整组介绍(空分组里那条)与单张介绍走不同的保存路径 */
+        if(ta.classList.contains('mg-gdesc')){this.mgGroupDescSave(gs.dataset.d,ta.value);return}
+        const ph=ta.closest('.mg-ph');
+        if(!ph)return;
         this.mgDescSave(ph.dataset.d,+ph.dataset.i,ta.value);
       },0);
     });
@@ -2981,10 +3187,12 @@ const Admin={
     const box=$('#mgList');
     const data=this.mgData;
     if(!data||!data.groups.length){box.innerHTML='<div class="mg-empty">云端归档为空 · 先在上方上传第一组照片</div>';return}
-    const gs=data.groups.filter(g=>g.gs&&g.gs.some(p=>p.k));
+    /* 只显示"云端有内容"的组:有已上传照片的,或者本来就是空分组(站主刻意建的,
+       要在管理面板里能看到它的介绍输入框并管理)。仅含旧式非 COS 照片的组与演示数据一样不显示 */
+    const gs=data.groups.filter(g=>!g.gs||g.gs.length===0||g.gs.some(p=>p.k));
     if(!gs.length){box.innerHTML='<div class="mg-empty">云端归档里没有已上传的照片(当前为演示数据)</div>';return}
     box.innerHTML=gs.map(g=>{
-      const photos=g.gs.map((p,i)=>{
+      const photos=(g.gs||[]).map((p,i)=>{
         if(!p.k)return '';
         const ex=(p.exif||'').replace(/<br>/g,' · ');
         return `
@@ -3004,16 +3212,22 @@ const Admin={
           </div>
         </div>`;
       }).join('');
+      const n=(g.gs||[]).filter(p=>p.k).length;
+      /* 空分组:不显示"删除整组"之外的尴尬空块,改为一条说明 + 整组介绍输入框 */
+      const empty=n?photos:`<div class="mg-blank">这一组还没有照片 · 访客可以在组页看到介绍并留言</div>
+        <div class="mg-main">
+          <textarea class="mg-desc mg-gdesc" rows="2" maxlength="300" placeholder="整组介绍(可选) · 显示在组详情页,失焦自动保存">${esc(g.c||'')}</textarea>
+        </div>`;
       return `
       <div class="mg-group" data-d="${g.d}">
         <div class="mg-g-head">
           <span>${g.d}</span>
           <span class="mg-g-title">${esc(g.title||'')}</span>
           <span>${esc(g.loc||'')}</span>
-          <span>${g.gs.filter(p=>p.k).length}/${g.gs.length} 张</span>
+          <span>${n?n+'/'+g.gs.length+' 张':'空分组'}</span>
           <span class="mg-g-act"><button type="button" class="mg-btn danger" data-act="gdel">删除整组</button></span>
         </div>
-        ${photos}
+        ${empty}
       </div>`;
     }).join('');
   },
@@ -3087,9 +3301,9 @@ const Admin={
     let removed=0;
     byGroup.forEach((idxs,g)=>{
       idxs.sort((a,b)=>b-a).forEach(i=>{g.gs.splice(i,1);removed++});
+      /* 只移除"因这次清理而变空"的组;本来就是空的组(只有介绍和留言)保留 */
+      if(!g.gs.length)data.groups=data.groups.filter(x=>x!==g);
     });
-    /* 空组一并移除 */
-    data.groups=data.groups.filter(g=>g.gs&&g.gs.length);
     try{
       await this.mgSave(`已清理 ${removed} 条失效记录`);
     }catch(e){
@@ -3198,7 +3412,8 @@ const Admin={
        若索引写失败,要明确告诉站主"文件已删、只是列表没更新",
        否则会以为没删掉而重复操作。 */
     g.gs.splice(i,1);
-    if(!g.gs.length)this.mgData.groups=this.mgData.groups.filter(x=>x!==g);
+    /* 删掉了组里最后一张照片时,保留这一组(不再自动移除) ——
+       站主可能是有意留着一个只有介绍和留言的组;要删整组有「删除整组」按钮 */
     try{
       await this.mgSave('已删除');
     }catch(err){
@@ -3209,11 +3424,12 @@ const Admin={
   async mgDeleteGroup(d){
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(!g)return;
-    if(!confirm(`确定删除整组「${g.title||d}」(${g.gs.length} 张)?\n云端文件会一并移除,不可恢复。`))return;
+    const n=(g.gs||[]).length;
+    if(!confirm(`确定删除整组「${g.title||d}」${n?`(${n} 张)`:''}?\n${n?'云端文件会一并移除,':''}不可恢复。`))return;
     this.status('删除整组中 …');
     /* 一次请求带上全部 key(含小图),后端逐个删除,比逐张请求快很多 */
     const keys=[];
-    g.gs.forEach(p=>{
+    (g.gs||[]).forEach(p=>{
       if(!p.k)return;
       keys.push(p.k);
       if(p.tn){if(p.tn.s)keys.push(p.tn.s);if(p.tn.v)keys.push(p.tn.v)}
@@ -3292,6 +3508,19 @@ const Admin={
       await this.mgSave(v?'介绍已保存':'介绍已清空');
     }catch(err){
       this.status('保存介绍失败:'+(err&&err.message?err.message:''),'no');
+    }
+  },
+  /* 整组介绍:写给"这一组"的文字,空分组也适用(与单张介绍分开保存) */
+  async mgGroupDescSave(d,val){
+    const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
+    if(!g)return;
+    const v=(val||'').trim();
+    if(v===((g.c||'').trim()))return;
+    g.c=v;
+    try{
+      await this.mgSave(v?'整组介绍已保存':'整组介绍已清空');
+    }catch(err){
+      this.status('保存整组介绍失败:'+(err&&err.message?err.message:''),'no');
     }
   },
   readFileText(f){
@@ -3394,9 +3623,10 @@ const Admin={
     const desc=$('#afDesc').value.trim()||'';
     const exif=$('#afExif').value.trim()||'';
     const files=[...$('#afFiles').files];
-    if(!d||!title||!files.length){this.status('日期、标题、照片为必填','no');return}
+    /* 照片改为可选:不选照片时走"只建空分组"路径(仍会写 data.json) */
+    if(!d||!title){this.status('日期与标题为必填','no');return}
     const btn=$('#adminSubmit');
-    btn.disabled=true;btn.textContent='上传中…';
+    btn.disabled=true;btn.textContent=files.length?'上传中…':'建组中…';
     try{
       /* 1. 读现有 data.json(公有读直链) */
       let data={groups:[]};
@@ -3404,6 +3634,19 @@ const Admin={
         const r=await fetch(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'});
         if(r.ok){const j=await r.json();if(j&&Array.isArray(j.groups))data=j}
       }catch(e){}
+      /* ── 没有选照片:只建/更新这一组的资料,组内照片为空 ── */
+      if(!files.length){
+        const msg=this.upsertGroup(data,d,{loc,title,desc,exif});
+        this.prog(60,'保存归档数据…');
+        await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+        this.prog(100,'完成');
+        this.status(msg,'ok');
+        $('#afDesc').value='';$('#afExif').value='';
+        this._exifs=null;
+        const xl0=$('#afExifList');xl0.hidden=true;xl0.innerHTML='';
+        await Bus.emit('archive:reload');
+        return;
+      }
       /* 2. 逐张识别参数(选片时已扫过则复用)+ 逐张上传,每张携带各自的 EXIF */
       if(!this._exifs||this._exifs.length!==files.length){
         this.prog(2,'识别相机参数 …');
@@ -3452,16 +3695,7 @@ const Admin={
       }
       if(!gs.length)throw new Error('所有照片均上传失败,请检查密钥/存储桶/网络后重试');
       /* 3. 更新组数据(同日期则追加照片) */
-      const exist=data.groups.find(g=>g.d===d);
-      if(exist){
-        exist.gs.push(...gs);
-        if(loc&&loc!=='—')exist.loc=loc;
-        if(title)exist.title=title;
-        if(desc)exist.c=desc;
-        if(exif)exist.exif=exif;
-      }else{
-        data.groups.unshift({d,loc,title,c:desc,exif,gs});
-      }
+      this.upsertGroup(data,d,{loc,title,desc,exif},gs);
       /* 4. 写回 data.json */
       this.prog(95,'保存归档数据…');
       await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
@@ -3476,9 +3710,35 @@ const Admin={
     }catch(err){
       this.status('上传失败:'+(err&&err.message?err.message:'请检查密钥/存储桶名/地域是否正确'),'no');
     }finally{
-      btn.disabled=false;btn.textContent='上传这组照片';
+      btn.disabled=false;btn.textContent='开始上传';
       setTimeout(()=>{$('#adminProg').hidden=true},2500);
     }
+  },
+  /* 建组 / 并入已有组:同日期则更新资料并追加照片,否则新建一组。
+     新组用 unshift 排在最前,空组与有照片的组一视同仁(不再被过滤掉) */
+  upsertGroup(data,d,info,gs){
+    const exist=data.groups.find(g=>g.d===d);
+    const n=(gs&&gs.length)||0;
+    if(exist){
+      if(n)exist.gs.push(...gs);
+      if(!Array.isArray(exist.gs))exist.gs=[];
+      if(info.loc&&info.loc!=='—')exist.loc=info.loc;
+      if(info.title)exist.title=info.title;
+      if(info.desc)exist.c=info.desc;
+      if(info.exif)exist.exif=info.exif;
+      return n?`已并入 ${d} 这一组(新增 ${n} 张)`:`已更新 ${d} 这一组的资料`;
+    }
+    data.groups.unshift({d,loc:info.loc,title:info.title,c:info.desc,exif:info.exif,gs:gs||[]});
+    return n?`新组已建立:${d} · ${n} 张`:`空分组已建立:${d} · 可进入组页写介绍与留言`;
+  },
+  /* 「只建空分组」按钮:表单里没选照片时也能直接建组 */
+  async blankGroup(){
+    const d=$('#afDate').value,title=$('#afTitle').value.trim();
+    if(!d||!title){this.status('日期与标题为必填 · 建空组至少要有这两项','no');return}
+    if([...($('#afFiles').files||[])].length){
+      this.status('已选了照片 · 直接用「开始上传」即可','no');return;
+    }
+    return this.upload();
   }
 };
 
