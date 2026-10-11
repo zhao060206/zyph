@@ -173,10 +173,13 @@ function normalize(raw) {
     out.voting.config = {
       enabled: true,
       title: '首届 Phototropic 最美光影瞬间评选',
-      rules: '每位访客限投一张你最心动的照片。请在投票时附上你的真实联系 QQ,活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！',
+      rules: '每位访客可选心动的照片投票。请在投票时附上你的真实联系 QQ,活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！',
       deadline: '2026-11-15 23:59',
-      reward: '摄影集纪念明信片'
+      reward: '摄影集纪念明信片',
+      maxVotes: 1
     };
+  } else {
+    out.voting.config.maxVotes = Math.max(1, parseInt(out.voting.config.maxVotes, 10) || 1);
   }
   return out;
 }
@@ -435,7 +438,7 @@ async function handle(req, res) {
      */
     const sid = clean(body.sid, 128);
     const skey = clean(body.skey, 128);
-    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
       return json(res, 403, {
         error: '密钥校验未通过',
         hint: '请先在「站点设置」里保存 COS 密钥(与上传照片用的是同一对)。',
@@ -482,10 +485,11 @@ async function handle(req, res) {
     }
     const vid = clean(url.searchParams.get('vid'), 64);
     let userVoted = false;
-    let votedKey = null;
+    let votedKeys = [];
     if (vid && store.voting.voters && store.voting.voters[vid]) {
       userVoted = true;
-      votedKey = store.voting.voters[vid].key;
+      const vr = store.voting.voters[vid];
+      votedKeys = Array.isArray(vr.keys) ? vr.keys : (vr.key ? [vr.key] : []);
     }
     return json(res, 200, {
       enabled: Boolean(cfg.enabled) && !isExpired,
@@ -495,23 +499,27 @@ async function handle(req, res) {
       rules: cfg.rules || '',
       deadline: cfg.deadline || '',
       reward: cfg.reward || '',
+      maxVotes: Math.max(1, parseInt(cfg.maxVotes, 10) || 1),
       userVoted,
-      votedKey
+      votedKeys,
+      votedKey: votedKeys[0] || null
     });
   }
 
-  // 2. 公开:提交投票 (严格每人限投 1 票, 校验 QQ 号, 防止刷票)
+  // 2. 公开:提交投票 (支持站长指定可选张数, 校验 QQ 号, 防止刷票)
   if (p === '/api/vote/submit' && req.method === 'POST') {
     if (!rateLimit(ip, 'voteSub', 15, 60 * 1000))
       return json(res, 429, { error: '操作太频繁,请稍后再试' });
 
     const body = await readBody(req);
-    const key = clean(body.key, 512);
+    const rawKeys = Array.isArray(body.keys) ? body.keys : (body.key ? [body.key] : []);
+    const keys = [...new Set(rawKeys.map(k => clean(k, 512)).filter(Boolean))];
     const visitor = normalizeVisitor(body.visitor);
     const qq = clean(body.qq, 20);
 
     if (!loaded) await loadStore();
     const cfg = store.voting.config || {};
+    const maxVotes = Math.max(1, parseInt(cfg.maxVotes, 10) || 1);
     const now = Date.now();
     let isExpired = false;
     if (cfg.deadline) {
@@ -521,7 +529,10 @@ async function handle(req, res) {
     if (!cfg.enabled || isExpired) {
       return json(res, 400, { error: '本次投票活动已结束或暂未开启' });
     }
-    if (!key) return json(res, 400, { error: '请先挑选一张心仪的照片' });
+    if (!keys.length) return json(res, 400, { error: '请先挑选心仪的照片' });
+    if (keys.length > maxVotes) {
+      return json(res, 400, { error: `每位访客最多只能选择 ${maxVotes} 张照片` });
+    }
     if (!visitor) return json(res, 400, { error: '访客身份无效' });
 
     // 校验 QQ 号: 必须是 5~13 位纯数字
@@ -531,9 +542,12 @@ async function handle(req, res) {
 
     // 防刷票: 检查该 visitorId 是否已投过
     if (store.voting.voters && store.voting.voters[visitor.id]) {
+      const vr = store.voting.voters[visitor.id];
+      const vk = Array.isArray(vr.keys) ? vr.keys : (vr.key ? [vr.key] : []);
       return json(res, 400, {
-        error: '你已经投过票了,每位访客限投一张照片',
-        votedKey: store.voting.voters[visitor.id].key
+        error: '你已经投过票了,每位访客限参与一次',
+        votedKeys: vk,
+        votedKey: vk[0] || null
       });
     }
 
@@ -543,8 +557,7 @@ async function handle(req, res) {
       return json(res, 400, { error: '该 QQ 号已参与过本次投票,不可重复使用' });
     }
 
-    // 入库记录
-    if (!store.voting.votes[key]) store.voting.votes[key] = [];
+    // 入库记录 (所选照片分别增加得票)
     const voteRecord = {
       visitorId: visitor.id,
       name: visitor.name,
@@ -552,15 +565,19 @@ async function handle(req, res) {
       qq,
       ts: now
     };
-    store.voting.votes[key].push(voteRecord);
-    store.voting.voters[visitor.id] = { key, qq, ts: now };
+    keys.forEach(k => {
+      if (!store.voting.votes[k]) store.voting.votes[k] = [];
+      store.voting.votes[k].push(voteRecord);
+    });
+    store.voting.voters[visitor.id] = { keys, key: keys[0], qq, ts: now };
 
     await persist();
     return json(res, 200, {
       ok: true,
       message: '投票成功！感谢你的参与',
-      votedKey: key,
-      totalCount: store.voting.votes[key].length
+      votedKeys: keys,
+      votedKey: keys[0],
+      count: keys.length
     });
   }
 
@@ -569,7 +586,7 @@ async function handle(req, res) {
     const body = await readBody(req);
     const sid = clean(body.sid, 128);
     const skey = clean(body.skey, 128);
-    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
       return json(res, 403, { error: '密钥校验未通过' });
     }
     if (!loaded) await loadStore();
@@ -579,7 +596,8 @@ async function handle(req, res) {
       title: clean(c.title, 64) || '光影摄影评选',
       rules: clean(c.rules, 500) || '',
       deadline: clean(c.deadline, 32) || '',
-      reward: clean(c.reward, 100) || ''
+      reward: clean(c.reward, 100) || '',
+      maxVotes: Math.max(1, parseInt(c.maxVotes, 10) || 1)
     };
     await persist();
     return json(res, 200, { ok: true, config: store.voting.config });
@@ -590,7 +608,7 @@ async function handle(req, res) {
     const body = await readBody(req);
     const sid = clean(body.sid, 128);
     const skey = clean(body.skey, 128);
-    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
       return json(res, 403, { error: '密钥校验未通过' });
     }
     if (!loaded) await loadStore();

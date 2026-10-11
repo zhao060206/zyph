@@ -1485,11 +1485,12 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
             </label>
           </div>
           <div class="admin-field"><label>活动主标题 · 必填</label><input id="avfTitle" type="text" maxlength="40" placeholder="例如：首届 Phototropic 最美光影瞬间评选" required></div>
-          <div class="admin-field"><label>规则与活动说明文案</label><textarea id="avfRules" rows="3" maxlength="300" placeholder="说明每人限投1张、为什么需要附上联系QQ、评选截止后福利等"></textarea></div>
+          <div class="admin-field"><label>规则与活动说明文案</label><textarea id="avfRules" rows="3" maxlength="300" placeholder="说明每位访客可选张数、为什么需要附上联系QQ、评选截止后福利等"></textarea></div>
           <div class="admin-row2">
             <div class="admin-field"><label>截止时间 (到期所有入口自动隐退)</label><input id="avfDeadline" type="datetime-local" required></div>
-            <div class="admin-field"><label>获胜福利说明</label><input id="avfReward" type="text" maxlength="40" placeholder="例如：精美摄影纪念画册一套"></div>
+            <div class="admin-field"><label>每位访客可选照片张数</label><input id="avfMaxVotes" type="number" min="1" max="20" value="1" placeholder="默认 1 张" required></div>
           </div>
+          <div class="admin-field"><label>获胜福利说明</label><input id="avfReward" type="text" maxlength="40" placeholder="例如：精美摄影纪念画册一套"></div>
           <button class="admin-btn admin-btn-primary admin-btn-lg" id="avfSaveBtn" type="submit">保存活动设置</button>
         </form>
       </div>
@@ -2395,9 +2396,14 @@ const Social={
 /* ─── 摄影评选投票模块 (Exhibition Ballot) ─── */
 const Vote={
   config:null,
-  selectedKey:null,
+  selectedKeys:[],
   userVoted:false,
+  votedKeys:[],
   votedKey:null,
+
+  getMaxVotes(){
+    return (this.config&&this.config.maxVotes)?Math.max(1,parseInt(this.config.maxVotes,10)||1):1;
+  },
 
   async init(){
     this.bindUI();
@@ -2411,7 +2417,8 @@ const Vote={
       const j=await r.json();
       this.config=j;
       this.userVoted=Boolean(j.userVoted);
-      this.votedKey=j.votedKey||null;
+      this.votedKeys=Array.isArray(j.votedKeys)?j.votedKeys:(j.votedKey?[j.votedKey]:[]);
+      this.votedKey=this.votedKeys[0]||null;
       this.applyVisibility();
     }catch(e){}
   },
@@ -2441,9 +2448,10 @@ const Vote={
     if(!this.config||!this.config.enabled)return;
     const m=$('#voteNoticeModal');
     if(!m)return;
+    const max=this.getMaxVotes();
     $('#vmNoticeTitle').textContent=this.config.title||'最美光影瞬间评选';
     $('#vmNoticeDeadline').textContent='⏱ 截止时间: '+(this.config.deadline||'进行中');
-    $('#vmNoticeRules').textContent=this.config.rules||'挑选一张你最心动的作品投票,留下联系QQ抽取幸运纪念礼。';
+    $('#vmNoticeRules').textContent=this.config.rules||(max>1?`每位访客最多可挑选 ${max} 张心动的作品。请在投票时附上联系 QQ，活动截止后站长将联系得票最高作品的投票者赠送精美纪念礼！`:'每位访客限投一张你最心动的照片。请在投票时附上你的真实联系 QQ，活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！');
     const rw=$('#vmNoticeReward');
     if(rw){
       rw.textContent=this.config.reward?('🎁 获胜福利: '+this.config.reward):'';
@@ -2466,6 +2474,11 @@ const Vote={
     if(!b)return;
     b.hidden=false;
     document.body.style.overflow='hidden';
+    const max=this.getMaxVotes();
+    const tag=$('.vb-tag');
+    if(tag)tag.textContent=max>1?`✦ EXHIBITION BALLOT · 每人最多可投 ${max} 张`:'✦ EXHIBITION BALLOT · 每人限投 1 票';
+    const sub=$('#vbSub');
+    if(sub)sub.textContent=max>1?`点击卡片挑选 1~${max} 张作品 (再次点击可取消) · 附上联系 QQ · 评选截止后站长将送出礼物`:'点击卡片选中照片 · 附上联系 QQ · 评选截止后站长将为幸运投票者送出礼物';
     this.renderGrid();
     this.updateBar();
   },
@@ -2496,7 +2509,7 @@ const Vote={
       return;
     }
     grid.innerHTML=all.map(({p,g,key})=>{
-      const isSel=key===this.selectedKey||key===this.votedKey;
+      const isSel=this.userVoted?this.votedKeys.includes(key):this.selectedKeys.includes(key);
       return `
       <div class="vb-card${isSel?' selected':''}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="选择 ${esc(p.t)}">
         <div class="vb-badge-sel">✓</div>
@@ -2509,30 +2522,53 @@ const Vote={
   updateBar(){
     const thumb=$('#vbPickThumb'),title=$('#vbPickTitle'),sub=$('#vbPickSub');
     const submitBtn=$('#vbSubmit'),qqInput=$('#vbQQ'),hint=$('#vbHint');
+    const max=this.getMaxVotes();
+
     if(this.userVoted){
-      if(title)title.textContent='你已完成投票';
-      if(sub)sub.textContent='每位访客限投一张 · 感谢你的参与！';
+      if(title)title.textContent=`你已完成投票 (已选 ${this.votedKeys.length} 张)`;
+      if(sub)sub.textContent='每位访客限参与一次 · 感谢你的参与！';
       if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='已投票';}
       if(qqInput)qqInput.disabled=true;
       if(hint)hint.textContent='评选截止后站长将联系得奖者';
       return;
     }
-    if(!this.selectedKey){
+    if(!this.selectedKeys.length){
       if(thumb)thumb.innerHTML='';
       if(title)title.textContent='未选择照片';
-      if(sub)sub.textContent='请在上方点击卡片挑选你最爱的一张';
-      if(submitBtn)submitBtn.disabled=true;
+      if(sub)sub.textContent=max>1?`请在上方点击卡片挑选 (最多可选 ${max} 张)`:'请在上方点击卡片挑选你最爱的一张';
+      if(submitBtn){submitBtn.disabled=true;submitBtn.textContent=max>1?`确认投票 (0/${max} 张)`:'确认投这一张';}
     }else{
-      let found=null;
-      (Store.groups||[]).some(g=>(g.gs||[]).some(p=>{
-        if(this.photoKey(g,p)===this.selectedKey){found={p,g};return true;}
-      }));
-      if(found){
-        if(thumb)thumb.innerHTML=`<img src="${pURL(found.p,300)}" alt="">`;
-        if(title)title.textContent=found.p.t||found.g.title;
-        if(sub)sub.textContent=`来自《${found.g.title}》· 点击右侧输入QQ完成投票`;
+      const foundList=[];
+      this.selectedKeys.forEach(k=>{
+        (Store.groups||[]).some(g=>(g.gs||[]).some(p=>{
+          if(this.photoKey(g,p)===k){foundList.push({p,g});return true;}
+        }));
+      });
+      if(thumb){
+        if(foundList.length===1){
+          thumb.innerHTML=`<img src="${pURL(foundList[0].p,300)}" alt="">`;
+        }else if(foundList.length>1){
+          thumb.innerHTML=`<div style="display:flex;gap:2px;width:100%;height:100%;align-items:center;overflow:hidden">${foundList.slice(0,3).map(f=>`<img src="${pURL(f.p,300)}" style="width:calc(33.3% - 2px);height:100%;object-fit:cover;border-radius:3px" alt="">`).join('')}</div>`;
+        }
       }
-      if(submitBtn)submitBtn.disabled=!this.checkQQ();
+      if(title){
+        if(max===1&&foundList[0]){
+          title.textContent=foundList[0].p.t||foundList[0].g.title;
+        }else{
+          title.textContent=`已选择 ${this.selectedKeys.length} / ${max} 张作品`;
+        }
+      }
+      if(sub){
+        if(max===1&&foundList[0]){
+          sub.textContent=`来自《${foundList[0].g.title}》· 输入QQ完成投票`;
+        }else{
+          sub.textContent=`最多可选 ${max} 张 · 输入QQ完成投票`;
+        }
+      }
+      if(submitBtn){
+        submitBtn.textContent=max>1?`确认投票 (${this.selectedKeys.length}/${max} 张)`:'确认投这一张';
+        submitBtn.disabled=!this.checkQQ()||this.selectedKeys.length===0||this.selectedKeys.length>max;
+      }
     }
   },
 
@@ -2563,8 +2599,32 @@ const Vote={
         if(this.userVoted)return;
         const card=e.target.closest('.vb-card');
         if(!card)return;
-        this.selectedKey=card.dataset.key;
-        grid.querySelectorAll('.vb-card').forEach(c=>c.classList.toggle('selected',c.dataset.key===this.selectedKey));
+        const k=card.dataset.key;
+        if(!k)return;
+        const max=this.getMaxVotes();
+        const idx=this.selectedKeys.indexOf(k);
+        const hint=$('#vbHint');
+
+        if(idx>-1){
+          this.selectedKeys.splice(idx,1);
+          if(hint){hint.textContent='';hint.className='vb-hint';}
+        }else{
+          if(max===1){
+            this.selectedKeys=[k];
+            if(hint){hint.textContent='';hint.className='vb-hint';}
+          }else{
+            if(this.selectedKeys.length>=max){
+              if(hint){
+                hint.textContent=`最多可选 ${max} 张照片，可点击已选照片取消选择`;
+                hint.className='vb-hint err';
+              }
+              return;
+            }
+            this.selectedKeys.push(k);
+            if(hint){hint.textContent='';hint.className='vb-hint';}
+          }
+        }
+        grid.querySelectorAll('.vb-card').forEach(c=>c.classList.toggle('selected',this.selectedKeys.includes(c.dataset.key)));
         this.updateBar();
       });
     }
@@ -2574,7 +2634,10 @@ const Vote={
       qqInp.dataset.bound='1';
       qqInp.addEventListener('input',()=>{
         const btn=$('#vbSubmit');
-        if(btn&&!this.userVoted)btn.disabled=!this.selectedKey||!this.checkQQ();
+        const max=this.getMaxVotes();
+        if(btn&&!this.userVoted){
+          btn.disabled=!this.selectedKeys.length||this.selectedKeys.length>max||!this.checkQQ();
+        }
         const hint=$('#vbHint');
         if(hint){
           if(qqInp.value && !/^\d{5,13}$/.test(qqInp.value.trim())){
@@ -2596,7 +2659,8 @@ const Vote={
   },
 
   async submitVote(){
-    if(!this.selectedKey||!this.checkQQ()||this.userVoted)return;
+    const max=this.getMaxVotes();
+    if(!this.selectedKeys.length||this.selectedKeys.length>max||!this.checkQQ()||this.userVoted)return;
     const qq=$('#vbQQ').value.trim();
     const btn=$('#vbSubmit'),hint=$('#vbHint');
     btn.disabled=true;btn.textContent='提交中…';
@@ -2606,7 +2670,7 @@ const Vote={
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          key:this.selectedKey,
+          keys:this.selectedKeys,
           visitor:Identity.pack(),
           qq
         })
@@ -2614,14 +2678,16 @@ const Vote={
       const j=await r.json();
       if(!r.ok||!j.ok)throw new Error(j.error||'提交失败');
       this.userVoted=true;
-      this.votedKey=this.selectedKey;
+      this.votedKeys=[...this.selectedKeys];
+      this.votedKey=this.votedKeys[0]||null;
       if(hint){hint.textContent='✓ 投票成功！感谢你的参与';hint.className='vb-hint ok';}
       this.updateBar();
       setTimeout(()=>{
         this.closeBoard();
       },2200);
     }catch(e){
-      btn.disabled=false;btn.textContent='确认投这一张';
+      btn.disabled=false;
+      btn.textContent=max>1?`确认投票 (${this.selectedKeys.length}/${max} 张)`:'确认投这一张';
       if(hint){hint.textContent=e.message;hint.className='vb-hint err';}
     }
   }
@@ -3643,6 +3709,7 @@ const Admin={
     if($('#avfTitle'))$('#avfTitle').value=cfg.title||'';
     if($('#avfRules'))$('#avfRules').value=cfg.rules||'';
     if($('#avfDeadline'))$('#avfDeadline').value=cfg.deadline||'';
+    if($('#avfMaxVotes'))$('#avfMaxVotes').value=cfg.maxVotes||1;
     if($('#avfReward'))$('#avfReward').value=cfg.reward||'';
 
     if($('#avTotalVotes'))$('#avTotalVotes').textContent=data.totalVotes||0;
@@ -3689,6 +3756,7 @@ const Admin={
       title:$('#avfTitle').value.trim(),
       rules:$('#avfRules').value.trim(),
       deadline:$('#avfDeadline').value,
+      maxVotes:Math.max(1,parseInt($('#avfMaxVotes')?.value,10)||1),
       reward:$('#avfReward').value.trim()
     };
     try{
@@ -3712,7 +3780,8 @@ const Admin={
       this.status('暂无投票记录可导出','no');
       return;
     }
-    let txt=`=== Phototropic 摄影评选投票中奖核对名单 ===\n生成时间: ${new Date().toLocaleString()}\n总投票数: ${this.voteData.totalVotes} 票 · 参与人数: ${this.voteData.voterCount} 人\n\n`;
+    const max = this.voteData.config?.maxVotes || 1;
+    let txt=`=== Phototropic 摄影评选投票中奖核对名单 ===\n生成时间: ${new Date().toLocaleString()}\n活动规则: 每人可选 ${max} 张\n总投票数: ${this.voteData.totalVotes} 票 · 参与人数: ${this.voteData.voterCount} 人\n\n`;
     this.voteData.ranking.forEach((item,idx)=>{
       let photoTitle='参选作品';
       (Store.groups||[]).some(g=>(g.gs||[]).some(p=>{if(p.k===item.key){photoTitle=(p.t||g.title)+' ('+g.d+')';return true}}));
