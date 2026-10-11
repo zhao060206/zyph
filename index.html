@@ -575,6 +575,8 @@ html[data-theme="bright"] .top-vote-badge{background:linear-gradient(135deg,rgba
 .vm-btn-pri{background:linear-gradient(135deg,var(--coral),var(--apricot));border:none;color:#fff;
   box-shadow:0 6px 22px -4px rgba(255,94,91,.55)}
 .vm-btn-pri:hover{box-shadow:0 10px 30px -4px rgba(255,94,91,.7);transform:translateY(-1px)}
+.vm-btn-sub{background:linear-gradient(135deg,rgba(52,211,153,.18),rgba(43,196,164,.12));border:1px solid rgba(52,211,153,.45);color:var(--mint)}
+.vm-btn-sub:hover{background:linear-gradient(135deg,rgba(52,211,153,.3),rgba(43,196,164,.22));border-color:var(--mint);color:#fff;transform:translateY(-1px)}
 
 /* 全屏投票画板 (Exhibition Ballot) */
 .vote-board{position:fixed;top:0;left:0;right:0;bottom:0;z-index:3600;display:flex;align-items:center;justify-content:center;padding:14px}
@@ -668,6 +670,68 @@ html[data-theme="bright"] .vb-card{background:rgba(0,0,0,.03);box-shadow:0 4px 1
 html[data-theme="bright"] .vb-card.selected{border-color:#D97706;background:rgba(217,142,43,.08)}
 html[data-theme="bright"] .av-rank-item{background:rgba(255,255,255,.8);border-color:rgba(30,59,52,.12)}
 html[data-theme="bright"] .av-voter-chip{background:rgba(0,0,0,.04);border-color:rgba(30,59,52,.1)}
+
+/* ═══════ 作品征集活动专区样式 (Photo Submissions) ═══════ */
+.top-sub-badge{background:linear-gradient(135deg,rgba(52,211,153,.12),rgba(43,196,164,.08));
+  border-color:rgba(52,211,153,.35);color:var(--mint)}
+.top-sub-badge:hover{background:linear-gradient(135deg,rgba(52,211,153,.22),rgba(43,196,164,.16));
+  border-color:rgba(52,211,153,.6);box-shadow:0 0 24px -2px rgba(52,211,153,.45)}
+.top-sub-badge .tv-ico{color:var(--mint)}
+.top-sub-badge .tv-dot{background:var(--mint);box-shadow:0 0 8px var(--mint)}
+html[data-theme="bright"] .top-sub-badge{background:linear-gradient(135deg,rgba(14,159,131,.1),rgba(16,185,129,.08));
+  border-color:rgba(14,159,131,.35);color:#0E9F83}
+
+/* 征集投递画板 (1~3张照片卡片槽位) */
+.sub-pick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.sb-card{position:relative;border-radius:14px;overflow:hidden;aspect-ratio:4/3;background:rgba(255,255,255,.03);
+  border:1px solid var(--border);box-shadow:0 8px 24px -6px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;
+  transition:transform .25s var(--ease),border-color .25s,box-shadow .25s}
+.sb-card.has-img img{width:100%;height:100%;object-fit:cover;display:block}
+.sb-card.has-img:hover{transform:translateY(-3px);border-color:rgba(52,211,153,.45);box-shadow:0 14px 32px -8px rgba(0,0,0,.6)}
+.sb-card-num{position:absolute;top:8px;left:8px;z-index:2;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+  color:#fff;background:rgba(0,0,0,.6);padding:2px 7px;border-radius:6px;backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.12)}
+.sb-card-del{position:absolute;top:8px;right:8px;z-index:3;width:24px;height:24px;border-radius:50%;
+  background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);color:#ff9d8a;font-size:11px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.2s}
+.sb-card-del:hover{background:var(--coral);color:#fff;border-color:transparent;transform:scale(1.1)}
+
+/* 添加照片虚线卡 */
+.sb-add-card{border:1px dashed rgba(255,255,255,.24);background:rgba(255,255,255,.02);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-faint);transition:.3s var(--ease)}
+.sb-add-card:hover{border-color:var(--mint);background:rgba(52,211,153,.06);color:var(--mint);transform:translateY(-2px)}
+.sb-add-ico{font-size:24px;line-height:1;font-weight:300}
+.sb-add-txt{font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+
+/* 投稿信息表单卡 */
+.sb-form-box{padding:18px 20px;border-radius:16px;background:rgba(255,255,255,.025);border:1px solid var(--border);margin-bottom:12px}
+.sb-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sb-input{width:100%;font-family:inherit;font-size:12.5px;padding:10px 14px;border-radius:10px;
+  border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);outline:none;transition:border-color .3s}
+.sb-input:focus{border-color:var(--mint);box-shadow:0 0 16px -4px rgba(52,211,153,.25)}
+
+/* 站长后台: 征集审核与作品墙卡片 */
+.as-sub-card{display:flex;flex-direction:column;gap:12px;padding:16px 18px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.as-sub-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.as-sub-author{display:flex;align-items:center;gap:8px}
+.as-sub-title{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--text);letter-spacing:.03em}
+.as-sub-qq{font-family:var(--mono);font-size:11px;color:var(--sun);padding:3px 10px;border-radius:6px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.2)}
+.as-sub-time{font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-left:auto}
+.as-sub-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.as-photo-thumb{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:4/3;background:#0d1016;border:1px solid var(--border);cursor:pointer}
+.as-photo-thumb img{width:100%;height:100%;object-fit:cover;transition:transform .3s var(--ease)}
+.as-photo-thumb:hover img{transform:scale(1.06)}
+.as-photo-tag{position:absolute;bottom:4px;left:6px;font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px}
+
+html[data-theme="bright"] .sb-input{background:#fff;border-color:rgba(30,59,52,.18)}
+html[data-theme="bright"] .as-sub-card{background:rgba(255,255,255,.8);border-color:rgba(30,59,52,.12)}
+html[data-theme="bright"] .as-sub-qq{background:rgba(217,142,43,.08);border-color:rgba(217,142,43,.25);color:#B45309}
+html[data-theme="bright"] .sb-card{background:rgba(0,0,0,.03)}
+html[data-theme="bright"] .sb-add-card{border-color:rgba(30,59,52,.22)}
+
+@media(max-width:680px){
+  .sub-pick-grid{grid-template-columns:1fr 1fr}
+  .sb-form-row{grid-template-columns:1fr}
+}
 
 /* 手机端 */
 @media(max-width:860px){
@@ -1197,6 +1261,12 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
     <span class="tv-txt">去投票</span>
     <span class="tv-dot" aria-hidden="true"></span>
   </button>
+  <!-- 顶栏作品征集常驻徽章:活动进行时常驻显示,点击打开作品投递画板 -->
+  <button class="top-vote-badge top-sub-badge" id="topSubBadge" hidden aria-label="参与摄影作品征集" title="摄影作品征集邀约进行中">
+    <svg class="tv-ico" viewBox="0 0 24 24" width="14" height="14"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zM12 9a4 4 0 100 8 4 4 0 000-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="tv-txt">投递作品</span>
+    <span class="tv-dot" aria-hidden="true"></span>
+  </button>
   <span class="bar-stat" id="barStat">—</span>
 </nav>
 
@@ -1357,8 +1427,11 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
     </div>
     <div class="vm-actions">
       <button class="vm-btn vm-btn-sec" id="vmNoticeLater" type="button">先逛逛画廊</button>
+      <button class="vm-btn vm-btn-sub" id="vmNoticeSub" type="button" hidden>
+        <span>📷 去投递作品</span>
+      </button>
       <button class="vm-btn vm-btn-pri" id="vmNoticeGo" type="button">
-        <span>去挑选并投票</span>
+        <span id="vmNoticeGoTxt">去挑选并投票</span>
         <svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 12h14m-6-6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
@@ -1401,6 +1474,56 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
   </div>
 </div>
 
+<!-- 站内全屏作品征集投递画板 (Photo Submission Gallery) -->
+<div class="vote-board sub-board" id="subBoardModal" hidden role="dialog" aria-modal="true" aria-label="摄影作品征集投递画板">
+  <div class="vb-mask" id="sbMask"></div>
+  <div class="vb-box glass">
+    <button class="vb-close" id="sbClose" aria-label="关闭投递">✕</button>
+    <div class="vb-head">
+      <div class="vb-tag" id="sbTag">✦ CALL FOR ENTRIES · 欢迎投递 1~3 张摄影佳作</div>
+      <h2 class="vb-title" id="sbTitle">投递你的原创摄影作品</h2>
+      <p class="vb-sub" id="sbSub">挑选 1~3 张心仪照片 · 填写联系 QQ · 截稿后站长精选作品入册并赠送精美画册礼品</p>
+    </div>
+
+    <div class="vb-grid-wrap" style="padding:22px 28px">
+      <!-- 1~3 张已选照片预览与添加槽位 -->
+      <div class="sub-pick-grid" id="sbPickGrid"></div>
+      <input type="file" id="sbFileInput" accept="image/*" multiple hidden>
+
+      <!-- 投稿表单信息卡 -->
+      <div class="sb-form-box">
+        <div class="sb-form-row">
+          <div class="admin-field" style="margin-bottom:0">
+            <label>作品组名称 / 拍摄主题 · 选填</label>
+            <input class="sb-input" id="sbWorkTitle" type="text" maxlength="40" placeholder="例如：山野秋雾、街头拾光、雨后窗景…">
+          </div>
+          <div class="admin-field" style="margin-bottom:0">
+            <label>联系 QQ 号 · 必填 (用于兑现精美画册奖品)</label>
+            <input class="sb-input" id="sbQQ" type="text" maxlength="13" inputmode="numeric" placeholder="输入 5~13 位纯数字 QQ 号">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部固定提交条 -->
+    <div class="vb-bar">
+      <div class="vb-bar-left">
+        <div class="me-bar" style="margin-top:0;padding:6px 12px;background:none;border:none">
+          <span class="cm-av" id="sbMeAv"></span>
+          <span class="me-name" id="sbMeName">—</span>
+          <span class="me-note">投稿人落款</span>
+        </div>
+      </div>
+      <div class="vb-bar-right">
+        <div class="vb-bar-row">
+          <button class="vb-submit" id="sbSubmit" type="button" disabled>确认投递作品 (0/3 张)</button>
+        </div>
+        <div class="vb-hint" id="sbHint"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 管理面板 -->
 <div class="admin" id="adminPanel" hidden>
   <div class="admin-mask" id="adminMask"></div>
@@ -1419,6 +1542,7 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
       <button class="atab" data-tab="manage" role="tab" aria-selected="false">管理已有</button>
       <button class="atab" data-tab="music" role="tab" aria-selected="false">背景音乐</button>
       <button class="atab" data-tab="vote" role="tab" aria-selected="false">投票活动</button>
+      <button class="atab" data-tab="submission" role="tab" aria-selected="false">作品征集</button>
       <button class="atab" data-tab="setup" role="tab" aria-selected="false">站点设置</button>
     </div>
 
@@ -1509,7 +1633,45 @@ if(!String.prototype.padStart){String.prototype.padStart=function(n,c){var s=Str
       </div>
     </div>
 
-    <!-- ⑤ 站点设置(密钥 + 发布) -->
+    <!-- ⑤ 作品征集活动管理 (配置活动 + 实时查看投稿作品瀑布流与 QQ 名单) -->
+    <div class="apane" data-pane="submission" id="adminSubPane">
+      <div class="admin-sec">
+        <div class="admin-sec-t">作品征集活动配置 · 定时控制</div>
+        <div class="pane-intro">开启后，访客端将常驻「投递作品」专属入口，支持访客上传 1~3 张原创摄影照片并附带联系 QQ。截稿后入口自动隐退。</div>
+        <form id="adminSubForm">
+          <div class="admin-field-check">
+            <label class="switch-lbl">
+              <input type="checkbox" id="asfEnabled" checked>
+              <span class="switch-txt">启用本次作品征集活动</span>
+            </label>
+          </div>
+          <div class="admin-field"><label>征集活动标题 · 必填</label><input id="asfTitle" type="text" maxlength="40" placeholder="例如：首届 Phototropic 摄影作品征集邀约" required></div>
+          <div class="admin-field"><label>征集规则与说明文案</label><textarea id="asfRules" rows="3" maxlength="300" placeholder="说明作品题材要求、评选标准、联系QQ用途与截止后奖品安排等"></textarea></div>
+          <div class="admin-row2">
+            <div class="admin-field"><label>截止时间 (到期所有征集入口自动隐退)</label><input id="asfDeadline" type="datetime-local" required></div>
+            <div class="admin-field"><label>允许上传照片张数 (1~3 张)</label><input id="asfMaxPhotos" type="number" min="1" max="3" value="3" placeholder="最多 3 张" required></div>
+          </div>
+          <div class="admin-field"><label>获胜福利/奖品说明</label><input id="asfReward" type="text" maxlength="40" placeholder="例如：精美摄影画册一套 + 专题署名展出"></div>
+          <button class="admin-btn admin-btn-primary admin-btn-lg" id="asfSaveBtn" type="submit">保存征集活动设置</button>
+        </form>
+      </div>
+
+      <div class="admin-sec">
+        <div class="admin-sec-t">投稿作品库 · 参展照片与投稿人 QQ 兑奖名单</div>
+        <div class="pane-intro">实时展示每位访客投递的作品、照片预览与联系 QQ。支持一键复制完整兑奖名单。</div>
+        <div class="av-stats-bar">
+          <div class="av-stat-badge">总投稿组数: <b id="asTotalCount">0</b></div>
+          <div class="av-stat-badge">累计照片数: <b id="asTotalPhotos">0</b></div>
+          <div class="av-stat-badge">参与人数: <b id="asTotalAuthors">0</b></div>
+          <div class="bar-spacer"></div>
+          <button class="admin-btn" id="asRefreshBtn" type="button">刷新作品</button>
+          <button class="admin-btn" id="asExportBtn" type="button">复制投稿名单</button>
+        </div>
+        <div class="av-rank-list" id="asSubmissionList"></div>
+      </div>
+    </div>
+
+    <!-- ⑥ 站点设置(密钥 + 发布) -->
     <div class="apane" data-pane="setup">
       <div class="admin-sec" id="adminKeysSec">
         <div class="admin-sec-t">第一步 · 填入腾讯云密钥</div>
@@ -1665,7 +1827,13 @@ const CONFIG={
   apiBase:''                    /* 互动接口地址:同源部署留空即可(走相对路径 /api/…);前后端分域时填后端完整域名 */
 };
 
-const cosURL=k=>`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`;
+const cosURL=k=>{
+  if(!k)return '';
+  if((location.hostname==='localhost'||location.hostname==='127.0.0.1')&&String(k).startsWith('submissions/')){
+    return '/'+k;
+  }
+  return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`;
+};
 
 /* ═══════ 预览图压缩 ═══════
    为什么需要:原图单张 12~20MB,访客列表里每张"小图"都在下原图,几十张就卡死。
@@ -2457,6 +2625,11 @@ const Vote={
       rw.textContent=this.config.reward?('🎁 获胜福利: '+this.config.reward):'';
       rw.hidden=!this.config.reward;
     }
+    const subBtn=$('#vmNoticeSub');
+    if(subBtn){
+      const subOn=window.Submission&&Submission.config&&Submission.config.enabled&&!Submission.config.isExpired;
+      subBtn.hidden=!subOn;
+    }
     m.hidden=false;
     document.body.style.overflow='hidden';
   },
@@ -2583,10 +2756,11 @@ const Vote={
       tb.dataset.bound='1';
       tb.addEventListener('click',()=>this.openBoard());
     }
-    const vclose=$('#vmNoticeClose'),vskip=$('#vmNoticeLater'),vgo=$('#vmNoticeGo');
+    const vclose=$('#vmNoticeClose'),vskip=$('#vmNoticeLater'),vgo=$('#vmNoticeGo'),vsub=$('#vmNoticeSub');
     if(vclose)vclose.addEventListener('click',()=>this.closeNotice());
     if(vskip)vskip.addEventListener('click',()=>this.closeNotice());
     if(vgo)vgo.addEventListener('click',()=>this.openBoard());
+    if(vsub)vsub.addEventListener('click',()=>{this.closeNotice();if(window.Submission)Submission.openBoard()});
     $('#vmNoticeMask')?.addEventListener('click',()=>this.closeNotice());
 
     $('#vbClose')?.addEventListener('click',()=>this.closeBoard());
@@ -2688,6 +2862,265 @@ const Vote={
     }catch(e){
       btn.disabled=false;
       btn.textContent=max>1?`确认投票 (${this.selectedKeys.length}/${max} 张)`:'确认投这一张';
+      if(hint){hint.textContent=e.message;hint.className='vb-hint err';}
+    }
+  }
+};
+
+/* ─── 摄影作品征集投递模块 (Photo Submissions) ─── */
+const Submission={
+  config:null,
+  photos:[],   // [ { file, data, tn, title } ]
+  userSubmitted:false,
+  submittedItem:null,
+
+  getMaxPhotos(){
+    return (this.config&&this.config.maxPhotos)?Math.min(3,Math.max(1,parseInt(this.config.maxPhotos,10)||3)):3;
+  },
+
+  async init(){
+    this.bindUI();
+    await this.fetchStatus();
+  },
+
+  async fetchStatus(){
+    try{
+      const r=await fetch((CONFIG.apiBase||'')+'/api/submission/config?vid='+(Identity.id||''),{cache:'no-store'});
+      if(!r.ok)return;
+      const j=await r.json();
+      this.config=j;
+      this.userSubmitted=Boolean(j.userSubmitted);
+      this.submittedItem=j.submittedItem||null;
+      this.applyVisibility();
+    }catch(e){}
+  },
+
+  applyVisibility(){
+    const topBadge=$('#topSubBadge');
+    if(!this.config||!this.config.enabled||this.config.isExpired){
+      if(topBadge)topBadge.hidden=true;
+      const board=$('#subBoardModal');if(board)board.hidden=true;
+      return;
+    }
+    // 活动开启中: 顶栏展示投稿徽章
+    if(topBadge)topBadge.hidden=false;
+  },
+
+  openBoard(){
+    const b=$('#subBoardModal');
+    if(!b)return;
+    b.hidden=false;
+    document.body.style.overflow='hidden';
+    const max=this.getMaxPhotos();
+    const tag=$('#sbTag');if(tag)tag.textContent=`✦ PHOTO CALL FOR ENTRIES · 欢迎投递 1~${max} 张作品`;
+    const sub=$('#sbSub');if(sub)sub.textContent=`挑选 1~${max} 张心仪照片 · 填写联系 QQ · 截稿后站长精选作品入册并赠送精美画册礼品`;
+    this.renderCards();
+    this.updateBar();
+  },
+
+  closeBoard(){
+    const b=$('#subBoardModal');
+    if(b)b.hidden=true;
+    if(($('#voteNoticeModal')&&!$('#voteNoticeModal').hidden)||($('#voteBoardModal')&&!$('#voteBoardModal').hidden)){}
+    else{document.body.style.overflow='';}
+  },
+
+  /* 渲染 1~3 张照片选取卡片 */
+  renderCards(){
+    const grid=$('#sbPickGrid');
+    if(!grid)return;
+    const max=this.getMaxPhotos();
+    const list=this.userSubmitted&&this.submittedItem?(this.submittedItem.photos||[]):this.photos;
+
+    let html='';
+    list.forEach((p,idx)=>{
+      const src=p.tn||p.data||(p.k?cosURL(p.k):'');
+      const t=p.title||`作品 ${String(idx+1).padStart(2,'0')}`;
+      html+=`
+        <div class="sb-card has-img">
+          <span class="sb-card-num">${String(idx+1).padStart(2,'0')}</span>
+          ${!this.userSubmitted?`<button class="sb-card-del" type="button" data-idx="${idx}" title="移除这张照片">✕</button>`:''}
+          <img src="${src}" alt="${esc(t)}">
+        </div>
+      `;
+    });
+
+    if(!this.userSubmitted&&list.length<max){
+      html+=`
+        <div class="sb-card sb-add-card" id="sbAddBtn" tabindex="0" role="button" aria-label="挑选照片上传">
+          <div class="sb-add-ico">＋</div>
+          <div class="sb-add-txt">添加照片 (${list.length}/${max})</div>
+        </div>
+      `;
+    }
+    grid.innerHTML=html;
+
+    $('#sbAddBtn')?.addEventListener('click',()=>$('#sbFileInput')?.click());
+    grid.querySelectorAll('.sb-card-del').forEach(btn=>{
+      btn.addEventListener('click',(e)=>{
+        const idx=+e.currentTarget.dataset.idx;
+        this.removePhoto(idx);
+      });
+    });
+  },
+
+  removePhoto(idx){
+    if(idx>=0&&idx<this.photos.length){
+      this.photos.splice(idx,1);
+      this.renderCards();
+      this.updateBar();
+    }
+  },
+
+  /* 选图后处理: 纯前端离屏压缩生成高清(1600)和小图(480) */
+  async handleFiles(fileList){
+    const files=Array.from(fileList||[]);
+    if(!files.length)return;
+    const max=this.getMaxPhotos();
+    const remain=max-this.photos.length;
+    if(remain<=0)return;
+
+    const toProcess=files.slice(0,remain);
+    const hint=$('#sbHint');
+    if(hint){hint.textContent='正在处理照片画质与离屏压缩…';hint.className='vb-hint';}
+
+    for(let f of toProcess){
+      try{
+        const viewBlob=await Thumb.make(f,Thumb.VIEW,0.82);
+        const smallBlob=await Thumb.make(f,Thumb.SMALL,0.82);
+
+        const [viewData,smallData]=await Promise.all([
+          this.blobToDataUrl(viewBlob),
+          this.blobToDataUrl(smallBlob)
+        ]);
+
+        this.photos.push({
+          file:f,
+          data:viewData,
+          tn:smallData,
+          title:f.name.replace(/\.[^.]+$/,'').slice(0,40)
+        });
+      }catch(e){
+        console.warn('处理照片失败:',f.name,e);
+      }
+    }
+
+    if(hint){hint.textContent='';}
+    this.renderCards();
+    this.updateBar();
+  },
+
+  blobToDataUrl(blob){
+    return new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=rej;
+      r.readAsDataURL(blob);
+    });
+  },
+
+  updateBar(){
+    const submitBtn=$('#sbSubmit'),qqInput=$('#sbQQ'),hint=$('#sbHint');
+    const titleInput=$('#sbWorkTitle');
+    const max=this.getMaxPhotos();
+
+    const av=$('#sbMeAv'),nm=$('#sbMeName');
+    if(av)av.innerHTML=Avatar.svg(Identity.avatar,28);
+    if(nm)nm.textContent=Identity.nick;
+
+    if(this.userSubmitted){
+      if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='已投稿';}
+      if(qqInput){qqInput.disabled=true;if(this.submittedItem)qqInput.value=this.submittedItem.qq;}
+      if(titleInput){titleInput.disabled=true;if(this.submittedItem)titleInput.value=this.submittedItem.title;}
+      if(hint)hint.textContent='✓ 你已完成投稿，截稿后站长将公布精选结果！';
+      return;
+    }
+
+    const count=this.photos.length;
+    if(submitBtn){
+      submitBtn.textContent=`确认投递作品 (${count}/${max} 张)`;
+      submitBtn.disabled=count===0||count>max||!this.checkQQ();
+    }
+  },
+
+  checkQQ(){
+    const qq=($('#sbQQ')?$('#sbQQ').value:'').trim();
+    return /^\d{5,13}$/.test(qq);
+  },
+
+  bindUI(){
+    $('#topSubBadge')?.addEventListener('click',()=>this.openBoard());
+    $('#sbClose')?.addEventListener('click',()=>this.closeBoard());
+    $('#sbMask')?.addEventListener('click',()=>this.closeBoard());
+
+    const fileInp=$('#sbFileInput');
+    if(fileInp&&!fileInp.dataset.bound){
+      fileInp.dataset.bound='1';
+      fileInp.addEventListener('change',(e)=>{
+        this.handleFiles(e.target.files);
+        e.target.value='';
+      });
+    }
+
+    const qqInp=$('#sbQQ');
+    if(qqInp&&!qqInp.dataset.bound){
+      qqInp.dataset.bound='1';
+      qqInp.addEventListener('input',()=>{
+        this.updateBar();
+        const hint=$('#sbHint');
+        if(hint){
+          if(qqInp.value && !/^\d{5,13}$/.test(qqInp.value.trim())){
+            hint.textContent='QQ号需为5-13位数字';
+            hint.className='vb-hint err';
+          }else{
+            hint.textContent='';
+            hint.className='vb-hint';
+          }
+        }
+      });
+    }
+
+    $('#sbSubmit')?.addEventListener('click',()=>this.submit());
+  },
+
+  async submit(){
+    if(!this.photos.length||!this.checkQQ()||this.userSubmitted)return;
+    const qq=$('#sbQQ').value.trim();
+    const title=($('#sbWorkTitle')?$('#sbWorkTitle').value:'').trim();
+    const btn=$('#sbSubmit'),hint=$('#sbHint');
+
+    btn.disabled=true;btn.textContent='正在上传作品…';
+    if(hint){hint.textContent='作品投递中，请勿关闭页面…';hint.className='vb-hint';}
+
+    try{
+      const payload={
+        visitor:Identity.pack(),
+        qq,
+        title,
+        photos:this.photos.map(p=>({
+          data:p.data,
+          tn:p.tn,
+          title:p.title
+        }))
+      };
+
+      const r=await fetch((CONFIG.apiBase||'')+'/api/submission/submit',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      const j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||'投递失败');
+
+      this.userSubmitted=true;
+      this.submittedItem=j.item;
+      if(hint){hint.textContent='✓ 作品投递成功！感谢你的参与';hint.className='vb-hint ok';}
+      this.renderCards();
+      this.updateBar();
+      setTimeout(()=>this.closeBoard(),2400);
+    }catch(e){
+      btn.disabled=false;
+      this.updateBar();
       if(hint){hint.textContent=e.message;hint.className='vb-hint err';}
     }
   }
@@ -3430,7 +3863,13 @@ const Exif={
 /* ─── 背景音乐:黑胶唱片 · 访客默认静音,点击播放(尊重 autoplay 政策与访客意愿) ─── */
 const Player={
   el:null,audio:null,tracks:[],i:0,_tipT:null,
-  cosURL(k){return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`},
+  cosURL(k){
+    if(!k)return '';
+    if((location.hostname==='localhost'||location.hostname==='127.0.0.1')&&String(k).startsWith('submissions/')){
+      return '/'+k;
+    }
+    return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`;
+  },
   async init(){
     this.el=$('#disc');
     if(!this.el||!CONFIG.cosBucket){if(this.el)this.el.hidden=true;return}
@@ -3563,6 +4002,10 @@ const Admin={
     $('#adminVoteForm')?.addEventListener('submit',ev=>{ev.preventDefault();this.saveVoteConfig()});
     $('#avRefreshBtn')?.addEventListener('click',()=>this.loadVoteAdmin());
     $('#avExportBtn')?.addEventListener('click',()=>this.exportVoteList());
+    /* 作品征集活动管理:保存设置、刷新作品与复制名单 */
+    $('#adminSubForm')?.addEventListener('submit',ev=>{ev.preventDefault();this.saveSubConfig()});
+    $('#asRefreshBtn')?.addEventListener('click',()=>this.loadSubAdmin());
+    $('#asExportBtn')?.addEventListener('click',()=>this.exportSubList());
     /* 入口:hash */
     if(location.hash==='#admin')this.open();
   },
@@ -3676,15 +4119,12 @@ const Admin={
     if(name==='manage'&&!this.mgData)this.loadManage();
     /* 切到投票活动页时,自动拉取一次投票活动配置与名单看板 */
     if(name==='vote')this.loadVoteAdmin();
+    /* 切到作品征集页时,自动拉取一次征集活动配置与作品墙看板 */
+    if(name==='submission')this.loadSubAdmin();
   },
   /* ─── 投票活动站长管理 ─── */
   async loadVoteAdmin(){
     const sid=this.getSid(),skey=this.getSkey();
-    if(!sid||!skey){
-      this.status('需要先保存 COS 密钥才能管理投票活动并查看名单','no');
-      this.tab('setup');
-      return;
-    }
     const btn=$('#avRefreshBtn');
     if(btn){btn.disabled=true;btn.textContent='读取中…';}
     try{
@@ -3694,7 +4134,14 @@ const Admin={
         body:JSON.stringify({sid,skey})
       });
       const j=await r.json();
-      if(!r.ok||!j.ok)throw new Error(j.error||('读取失败 HTTP '+r.status));
+      if(!r.ok||!j.ok){
+        if(r.status===403){
+          this.status('需要先在「站点设置」中保存 COS 密钥才能管理投票活动并查看名单','no');
+          this.tab('setup');
+          return;
+        }
+        throw new Error(j.error||('读取失败 HTTP '+r.status));
+      }
       this.voteData=j;
       this.renderVoteAdmin(j);
     }catch(e){
@@ -3797,6 +4244,127 @@ const Admin={
       this.status('复制失败,请在后台手动查看','no');
     });
   },
+  /* ─── 作品征集活动站长管理 ─── */
+  async loadSubAdmin(){
+    const sid=this.getSid(),skey=this.getSkey();
+    const btn=$('#asRefreshBtn');
+    if(btn){btn.disabled=true;btn.textContent='读取中…';}
+    try{
+      const r=await fetch((CONFIG.apiBase||'')+'/api/submission/admin/list',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sid,skey})
+      });
+      const j=await r.json();
+      if(!r.ok||!j.ok){
+        if(r.status===403){
+          this.status('需要先在「站点设置」中保存 COS 密钥才能管理征集活动并审核作品','no');
+          this.tab('setup');
+          return;
+        }
+        throw new Error(j.error||('读取失败 HTTP '+r.status));
+      }
+      this.subData=j;
+      this.renderSubAdmin(j);
+    }catch(e){
+      this.status('读取征集作品失败:'+e.message,'no');
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='刷新作品';}
+    }
+  },
+  renderSubAdmin(data){
+    const cfg=data.config||{};
+    if($('#asfEnabled'))$('#asfEnabled').checked=Boolean(cfg.enabled);
+    if($('#asfTitle'))$('#asfTitle').value=cfg.title||'';
+    if($('#asfRules'))$('#asfRules').value=cfg.rules||'';
+    if($('#asfDeadline'))$('#asfDeadline').value=cfg.deadline||'';
+    if($('#asfMaxPhotos'))$('#asfMaxPhotos').value=cfg.maxPhotos||3;
+    if($('#asfReward'))$('#asfReward').value=cfg.reward||'';
+
+    if($('#asTotalCount'))$('#asTotalCount').textContent=data.totalCount||0;
+    if($('#asTotalPhotos'))$('#asTotalPhotos').textContent=data.totalPhotos||0;
+    if($('#asTotalAuthors'))$('#asTotalAuthors').textContent=data.authorCount||0;
+
+    const list=$('#asSubmissionList');
+    if(!list)return;
+    if(!data.items||!data.items.length){
+      list.innerHTML='<div class="mg-empty">目前还没有人投稿 · 访客投递作品后将在此展示参展照片大样与联系 QQ</div>';
+      return;
+    }
+    list.innerHTML=data.items.map((item,idx)=>{
+      const photosHtml=(item.photos||[]).map((p,pi)=>`
+        <div class="as-photo-thumb" onclick="window.open('${cosURL(p.k)}','_blank')">
+          <img src="${cosURL(p.tn||p.k)}" alt="" loading="lazy">
+          <span class="as-photo-tag">${String(pi+1).padStart(2,'0')}</span>
+        </div>
+      `).join('');
+      return `
+      <div class="as-sub-card">
+        <div class="as-sub-head">
+          <div class="as-sub-author">
+            <span class="cm-av" style="width:24px;height:24px">${Avatar.svg(item.avatar,24)}</span>
+            <span class="as-sub-title">${esc(item.title||'原创作品')} · ${esc(item.name||'访客')}</span>
+          </div>
+          <span class="as-sub-qq">联系 QQ: <b>${esc(item.qq)}</b></span>
+          <span class="as-sub-time">${new Date(item.ts).toLocaleString()}</span>
+        </div>
+        <div class="as-sub-photos">${photosHtml}</div>
+      </div>`;
+    }).join('');
+  },
+  async saveSubConfig(){
+    const sid=this.getSid(),skey=this.getSkey();
+    if(!sid||!skey){
+      this.status('请先在「站点设置」里保存 COS 密钥','no');
+      return;
+    }
+    const btn=$('#asfSaveBtn');
+    if(btn){btn.disabled=true;btn.textContent='保存中…';}
+    const config={
+      enabled:$('#asfEnabled').checked,
+      title:$('#asfTitle').value.trim(),
+      rules:$('#asfRules').value.trim(),
+      deadline:$('#asfDeadline').value,
+      maxPhotos:Math.min(3,Math.max(1,parseInt($('#asfMaxPhotos')?.value,10)||3)),
+      reward:$('#asfReward').value.trim()
+    };
+    try{
+      const r=await fetch((CONFIG.apiBase||'')+'/api/submission/admin/config',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sid,skey,config})
+      });
+      const j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||'保存失败');
+      this.status('作品征集活动设置已保存并同步至云端！','ok');
+      await Submission.fetchStatus();
+    }catch(e){
+      this.status('保存征集设置失败:'+e.message,'no');
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='保存征集活动设置';}
+    }
+  },
+  exportSubList(){
+    if(!this.subData||!this.subData.items||!this.subData.items.length){
+      this.status('暂无投稿记录可导出','no');
+      return;
+    }
+    let txt=`=== Phototropic 摄影作品征集投稿与兑奖名单 ===\n生成时间: ${new Date().toLocaleString()}\n总投稿组数: ${this.subData.totalCount} 组 · 累计照片: ${this.subData.totalPhotos} 张 · 参与人数: ${this.subData.authorCount} 人\n\n`;
+    this.subData.items.forEach((item,idx)=>{
+      txt+=`【第 ${idx+1} 组】《${item.title||'无题'}》\n`;
+      txt+=`   · 创作者: ${item.name} | 联系QQ: ${item.qq} | 照片数: ${(item.photos||[]).length} 张\n`;
+      txt+=`   · 投稿时间: ${new Date(item.ts).toLocaleString()}\n`;
+      (item.photos||[]).forEach((p,pi)=>{
+        txt+=`     [${pi+1}] ${cosURL(p.k)}\n`;
+      });
+      txt+='\n';
+    });
+    navigator.clipboard.writeText(txt).then(()=>{
+      this.status('完整征集投稿与 QQ 兑奖名单已复制到剪贴板！','ok');
+    }).catch(()=>{
+      this.status('复制失败,请在后台手动查看','no');
+    });
+  },
   /* 检测互动后端是否可用(点赞/评论功能) */
   async checkServer(){
     const el=$('#srvState');
@@ -3885,7 +4453,13 @@ const Admin={
     }
     return j;
   },
-  cosURL(k){return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`},
+  cosURL(k){
+    if(!k)return '';
+    if((location.hostname==='localhost'||location.hostname==='127.0.0.1')&&String(k).startsWith('submissions/')){
+      return '/'+k;
+    }
+    return `https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/${k}`;
+  },
   /* ─── 已上传照片管理:删除 / 替换单张,改单张介绍 ───
      每次操作都从 COS 重读 data.json 再写回(不自用本地缓存),避免站主开两个窗口时互相覆盖;
      操作完成后经事件总线 archive:reload 刷新前台,管理列表原地重渲染 */
@@ -4490,6 +5064,7 @@ Lightbox.init();
 Admin.init();
 Player.init();   /* 有曲目才显示唱片;访客默认静音 */
 Vote.init();     /* 投票活动生命周期管理与弹窗入口 */
+Submission.init(); /* 作品征集活动生命周期管理与画板入口 */
 
 /* ─── 明暗主题切换(默认亮色 bright,选择本地记忆) ───
    平滑方案:优先用 View Transitions API,从切换按钮处做圆形 clip-path 揭示新主题。

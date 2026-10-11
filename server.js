@@ -78,6 +78,24 @@ function cosPut(key, text) {
   });
 }
 
+function cosPutBuffer(key, buffer, contentType = 'image/jpeg') {
+  return new Promise((resolve, reject) => {
+    if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+      return reject(new Error('COS 密钥未配置(缺少环境变量 COS_SECRET_ID / COS_SECRET_KEY)'));
+    }
+    cos.putObject(
+      {
+        Bucket: COS_BUCKET,
+        Region: COS_REGION,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      },
+      (err, data) => (err ? reject(err) : resolve(data))
+    );
+  });
+}
+
 /**
  * 删除 COS 对象。
  * 为什么删除要由服务器代做:浏览器直连 COS 删文件是跨域 DELETE 请求,
@@ -119,10 +137,17 @@ function localPut(text) {
   fs.writeFileSync(LOCAL_FILE, text, 'utf8');
 }
 
+function localPutBuffer(key, buffer) {
+  const p = path.join(__dirname, 'data', key);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, buffer);
+}
+
 const storageGet = (key) => (useCos ? cosGet(key) : Promise.resolve(localGet()));
 const storagePut = (key, text) => (useCos ? cosPut(key, text) : Promise.resolve(localPut(text)));
+const storagePutBuffer = (key, buffer, type) => (useCos ? cosPutBuffer(key, buffer, type) : Promise.resolve(localPutBuffer(key, buffer)));
 
-/* 本地模式下的"删除":仅做存在性校验(本地只有 interactions.json 一个文件,不涉及图片) */
+/* 本地模式下的"删除":仅做存在性校验 */
 const storageDelete = (key) => (useCos ? cosDelete(key) : Promise.resolve({ local: true }));
 
 /* ─────────── 数据层:内存缓存 + 写穿透 ─────────── */
@@ -140,6 +165,11 @@ function normalize(raw) {
       config: null,
       votes: {},   // { [photoKey]: [ { visitorId, name, avatar, qq, ts } ] }
       voters: {}   // { [visitorId]: { key, qq, ts } }
+    },
+    submissions: {
+      config: null,
+      items: [],   // [ { id, visitorId, name, avatar, qq, title, photos: [ { k, tn } ], ts } ]
+      authors: {}  // { [visitorId]: { id, qq, ts } }
     }
   };
   if (raw && typeof raw === 'object') {
@@ -167,8 +197,19 @@ function normalize(raw) {
         out.voting.voters = Object.assign({}, raw.voting.voters);
       }
     }
+    if (raw.submissions && typeof raw.submissions === 'object') {
+      if (raw.submissions.config && typeof raw.submissions.config === 'object') {
+        out.submissions.config = raw.submissions.config;
+      }
+      if (Array.isArray(raw.submissions.items)) {
+        out.submissions.items = raw.submissions.items.filter(Boolean);
+      }
+      if (raw.submissions.authors && typeof raw.submissions.authors === 'object') {
+        out.submissions.authors = Object.assign({}, raw.submissions.authors);
+      }
+    }
   }
-  // 若未曾配置过投票活动,提供优雅的初始默认值
+  // 投票活动默认配置
   if (!out.voting.config) {
     out.voting.config = {
       enabled: true,
@@ -180,6 +221,19 @@ function normalize(raw) {
     };
   } else {
     out.voting.config.maxVotes = Math.max(1, parseInt(out.voting.config.maxVotes, 10) || 1);
+  }
+  // 作品征集活动默认配置 (1~3 张作品投递)
+  if (!out.submissions.config) {
+    out.submissions.config = {
+      enabled: true,
+      title: '首届 Phototropic 摄影作品征集邀约',
+      rules: '欢迎投稿 1~3 张你的原创摄影佳作！请在提交时附上联系 QQ，活动截止后站长将精选优秀作品在画廊专题展出，并联系作者送出精美纪念礼品！',
+      deadline: '2026-11-30 23:59',
+      reward: '精美摄影集一份 + 画廊专题署名展出',
+      maxPhotos: 3
+    };
+  } else {
+    out.submissions.config.maxPhotos = Math.min(3, Math.max(1, parseInt(out.submissions.config.maxPhotos, 10) || 3));
   }
   return out;
 }
@@ -235,13 +289,13 @@ function json(res, code, obj) {
   res.end(body);
 }
 
-function readBody(req) {
+function readBody(req, limit = MAX_BODY) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > limit) {
         reject(new Error('请求体过大'));
         req.destroy();
         return;
@@ -640,6 +694,204 @@ async function handle(req, res) {
       ranking,
       config: store.voting.config
     });
+  }
+
+  /* ─────────── 作品征集活动相关 API (Submissions) ─────────── */
+
+  // 1. 公开:读取征集活动配置与访客投稿状态
+  if (p === '/api/submission/config' && req.method === 'GET') {
+    if (!loaded) await loadStore();
+    const cfg = store.submissions.config || {};
+    const now = Date.now();
+    let isExpired = false;
+    if (cfg.deadline) {
+      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
+      if (!isNaN(dTime) && now > dTime) isExpired = true;
+    }
+    const vid = clean(url.searchParams.get('vid'), 64);
+    let userSubmitted = false;
+    let submittedItem = null;
+    if (vid && store.submissions.authors && store.submissions.authors[vid]) {
+      userSubmitted = true;
+      const subId = store.submissions.authors[vid].id;
+      submittedItem = (store.submissions.items || []).find(it => it.id === subId) || null;
+    }
+    return json(res, 200, {
+      enabled: Boolean(cfg.enabled) && !isExpired,
+      rawEnabled: Boolean(cfg.enabled),
+      isExpired,
+      title: cfg.title || '摄影作品征集邀约',
+      rules: cfg.rules || '',
+      deadline: cfg.deadline || '',
+      reward: cfg.reward || '',
+      maxPhotos: Math.min(3, Math.max(1, parseInt(cfg.maxPhotos, 10) || 3)),
+      userSubmitted,
+      submittedItem
+    });
+  }
+
+  // 2. 公开:访客上传 1~3 张摄影作品投稿 (带 QQ 号与防刷)
+  if (p === '/api/submission/submit' && req.method === 'POST') {
+    if (!rateLimit(ip, 'subSubmit', 8, 60 * 1000))
+      return json(res, 429, { error: '投稿太频繁,请稍后再试' });
+
+    // 作品图片经 base64 上传, 放宽请求体上限为 16MB
+    const body = await readBody(req, 16 * 1024 * 1024);
+    const visitor = normalizeVisitor(body.visitor);
+    const qq = clean(body.qq, 20);
+    const title = clean(body.title, 40) || '原创摄影作品';
+    const photosRaw = Array.isArray(body.photos) ? body.photos : [];
+
+    if (!loaded) await loadStore();
+    const cfg = store.submissions.config || {};
+    const maxPhotos = Math.min(3, Math.max(1, parseInt(cfg.maxPhotos, 10) || 3));
+    const now = Date.now();
+    let isExpired = false;
+    if (cfg.deadline) {
+      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
+      if (!isNaN(dTime) && now > dTime) isExpired = true;
+    }
+    if (!cfg.enabled || isExpired) {
+      return json(res, 400, { error: '本次作品征集活动已结束或暂未开启' });
+    }
+    if (!visitor) return json(res, 400, { error: '访客身份无效' });
+
+    // 校验 QQ 号: 必须是 5~13 位纯数字
+    if (!qq || !/^\d{5,13}$/.test(qq)) {
+      return json(res, 400, { error: '请输入有效的联系 QQ 号(5-13位数字),方便站长联系发放纪念礼品' });
+    }
+
+    // 校验照片数量: 1 ~ maxPhotos (1~3张)
+    if (!photosRaw.length) return json(res, 400, { error: '请至少选择 1 张照片进行投稿' });
+    if (photosRaw.length > maxPhotos) {
+      return json(res, 400, { error: `本次活动每次投稿最多可选 ${maxPhotos} 张照片` });
+    }
+
+    // 防刷: 检查 visitorId 是否已投过
+    if (store.submissions.authors && store.submissions.authors[visitor.id]) {
+      return json(res, 400, { error: '你已经参与过本次作品征集了,每位访客限投递一次' });
+    }
+    // 防刷: 检查该 QQ 号是否已被使用
+    const qqUsed = Object.values(store.submissions.authors || {}).some(a => a && a.qq === qq);
+    if (qqUsed) {
+      return json(res, 400, { error: '该 QQ 号已参与过投稿,不可重复使用' });
+    }
+
+    // 处理并存储 1~3 张照片 (转为 Buffer 并上传至 COS 的 submissions/ 目录)
+    const subId = 'sub_' + now.toString(36) + '_' + crypto.randomBytes(3).toString('hex');
+    const yyyymm = new Date().toISOString().slice(0, 7).replace(/-/g, '');
+    const savedPhotos = [];
+
+    for (let i = 0; i < photosRaw.length; i++) {
+      const pItem = photosRaw[i];
+      if (!pItem || !pItem.data) continue;
+      // 解析高清图
+      const mainParsed = pItem.data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (!mainParsed) continue;
+      const ext = mainParsed[1].toLowerCase() === 'jpeg' ? 'jpg' : mainParsed[1].toLowerCase();
+      const mainBuf = Buffer.from(mainParsed[2], 'base64');
+      const mainKey = `submissions/${yyyymm}/${subId}_${i + 1}.${ext}`;
+
+      // 解析缩略图 (若前端已生成 480px 小图)
+      let tnKey = null;
+      if (pItem.tn) {
+        const tnParsed = pItem.tn.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (tnParsed) {
+          const tnExt = tnParsed[1].toLowerCase() === 'jpeg' ? 'jpg' : tnParsed[1].toLowerCase();
+          const tnBuf = Buffer.from(tnParsed[2], 'base64');
+          tnKey = `submissions/${yyyymm}/${subId}_${i + 1}_t480.${tnExt}`;
+          await storagePutBuffer(tnKey, tnBuf, 'image/' + tnExt);
+        }
+      }
+
+      await storagePutBuffer(mainKey, mainBuf, 'image/' + ext);
+      savedPhotos.push({
+        k: mainKey,
+        tn: tnKey || mainKey,
+        title: clean(pItem.title, 40) || `作品 ${String(i + 1).padStart(2, '0')}`
+      });
+    }
+
+    if (!savedPhotos.length) {
+      return json(res, 400, { error: '照片文件格式无效或解析失败' });
+    }
+
+    const submissionRecord = {
+      id: subId,
+      visitorId: visitor.id,
+      name: visitor.name,
+      avatar: visitor.avatar,
+      qq,
+      title,
+      photos: savedPhotos,
+      ts: now
+    };
+
+    if (!Array.isArray(store.submissions.items)) store.submissions.items = [];
+    store.submissions.items.unshift(submissionRecord);
+    store.submissions.authors[visitor.id] = { id: subId, qq, ts: now };
+
+    await persist();
+    return json(res, 200, {
+      ok: true,
+      message: '作品投稿成功！感谢你的创作与分享',
+      item: submissionRecord
+    });
+  }
+
+  // 3. 站长:保存修改征集活动配置
+  if (p === '/api/submission/admin/config' && req.method === 'POST') {
+    const body = await readBody(req);
+    const sid = clean(body.sid, 128);
+    const skey = clean(body.skey, 128);
+    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
+      return json(res, 403, { error: '密钥校验未通过' });
+    }
+    if (!loaded) await loadStore();
+    const c = body.config || {};
+    store.submissions.config = {
+      enabled: Boolean(c.enabled),
+      title: clean(c.title, 64) || '摄影作品征集邀约',
+      rules: clean(c.rules, 500) || '',
+      deadline: clean(c.deadline, 32) || '',
+      reward: clean(c.reward, 100) || '',
+      maxPhotos: Math.min(3, Math.max(1, parseInt(c.maxPhotos, 10) || 3))
+    };
+    await persist();
+    return json(res, 200, { ok: true, config: store.submissions.config });
+  }
+
+  // 4. 站长:获取所有征集作品明细与投稿人 QQ 清单
+  if (p === '/api/submission/admin/list' && req.method === 'POST') {
+    const body = await readBody(req);
+    const sid = clean(body.sid, 128);
+    const skey = clean(body.skey, 128);
+    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
+      return json(res, 403, { error: '密钥校验未通过' });
+    }
+    if (!loaded) await loadStore();
+
+    const items = store.submissions.items || [];
+    const totalPhotos = items.reduce((s, it) => s + (it.photos || []).length, 0);
+
+    return json(res, 200, {
+      ok: true,
+      totalCount: items.length,
+      totalPhotos,
+      authorCount: Object.keys(store.submissions.authors || {}).length,
+      items,
+      config: store.submissions.config
+    });
+  }
+
+  // 本地模式下读取投稿图片
+  if (p.startsWith('/submissions/') || p.startsWith('/data/submissions/')) {
+    const cleanRel = p.replace(/^\/data\//, '').replace(/^\//, '');
+    const fp = path.join(__dirname, 'data', cleanRel);
+    if (fs.existsSync(fp)) {
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      return fs.createReadStream(fp).pipe(res);
+    }
   }
 
   if (p === '/' || p === '/index.html') {
