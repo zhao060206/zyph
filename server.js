@@ -134,17 +134,49 @@ let writeChain = Promise.resolve();
 const EMPTY = () => ({ likes: [], comments: [] });
 
 function normalize(raw) {
-  const out = { photos: {} };
-  if (raw && typeof raw === 'object' && raw.photos && typeof raw.photos === 'object') {
-    for (const [k, v] of Object.entries(raw.photos)) {
-      if (!v || typeof v !== 'object') continue;
-      out.photos[k] = {
-        likes: Array.isArray(v.likes) ? v.likes.filter(Boolean).slice(0, 5000) : [],
-        comments: Array.isArray(v.comments)
-          ? v.comments.filter(Boolean).slice(-MAX_COMMENTS_PER_PHOTO)
-          : [],
-      };
+  const out = {
+    photos: {},
+    voting: {
+      config: null,
+      votes: {},   // { [photoKey]: [ { visitorId, name, avatar, qq, ts } ] }
+      voters: {}   // { [visitorId]: { key, qq, ts } }
     }
+  };
+  if (raw && typeof raw === 'object') {
+    if (raw.photos && typeof raw.photos === 'object') {
+      for (const [k, v] of Object.entries(raw.photos)) {
+        if (!v || typeof v !== 'object') continue;
+        out.photos[k] = {
+          likes: Array.isArray(v.likes) ? v.likes.filter(Boolean).slice(0, 5000) : [],
+          comments: Array.isArray(v.comments)
+            ? v.comments.filter(Boolean).slice(-MAX_COMMENTS_PER_PHOTO)
+            : [],
+        };
+      }
+    }
+    if (raw.voting && typeof raw.voting === 'object') {
+      if (raw.voting.config && typeof raw.voting.config === 'object') {
+        out.voting.config = raw.voting.config;
+      }
+      if (raw.voting.votes && typeof raw.voting.votes === 'object') {
+        for (const [k, arr] of Object.entries(raw.voting.votes)) {
+          if (Array.isArray(arr)) out.voting.votes[k] = arr.filter(Boolean);
+        }
+      }
+      if (raw.voting.voters && typeof raw.voting.voters === 'object') {
+        out.voting.voters = Object.assign({}, raw.voting.voters);
+      }
+    }
+  }
+  // 若未曾配置过投票活动,提供优雅的初始默认值
+  if (!out.voting.config) {
+    out.voting.config = {
+      enabled: true,
+      title: '首届 Phototropic 最美光影瞬间评选',
+      rules: '每位访客限投一张你最心动的照片。请在投票时附上你的真实联系 QQ,活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！',
+      deadline: '2026-11-15 23:59',
+      reward: '摄影集纪念明信片'
+    };
   }
   return out;
 }
@@ -433,6 +465,162 @@ async function handle(req, res) {
       deleted: results.filter((r) => r.ok).length,
       failed: failed.length,
       results,
+    });
+  }
+
+  /* ─────────── 投票活动相关 API ─────────── */
+
+  // 1. 公开:读取活动配置与截止状态
+  if (p === '/api/vote/config' && req.method === 'GET') {
+    if (!loaded) await loadStore();
+    const cfg = store.voting.config || {};
+    const now = Date.now();
+    let isExpired = false;
+    if (cfg.deadline) {
+      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
+      if (!isNaN(dTime) && now > dTime) isExpired = true;
+    }
+    const vid = clean(url.searchParams.get('vid'), 64);
+    let userVoted = false;
+    let votedKey = null;
+    if (vid && store.voting.voters && store.voting.voters[vid]) {
+      userVoted = true;
+      votedKey = store.voting.voters[vid].key;
+    }
+    return json(res, 200, {
+      enabled: Boolean(cfg.enabled) && !isExpired,
+      rawEnabled: Boolean(cfg.enabled),
+      isExpired,
+      title: cfg.title || '最美光影评选',
+      rules: cfg.rules || '',
+      deadline: cfg.deadline || '',
+      reward: cfg.reward || '',
+      userVoted,
+      votedKey
+    });
+  }
+
+  // 2. 公开:提交投票 (严格每人限投 1 票, 校验 QQ 号, 防止刷票)
+  if (p === '/api/vote/submit' && req.method === 'POST') {
+    if (!rateLimit(ip, 'voteSub', 15, 60 * 1000))
+      return json(res, 429, { error: '操作太频繁,请稍后再试' });
+
+    const body = await readBody(req);
+    const key = clean(body.key, 512);
+    const visitor = normalizeVisitor(body.visitor);
+    const qq = clean(body.qq, 20);
+
+    if (!loaded) await loadStore();
+    const cfg = store.voting.config || {};
+    const now = Date.now();
+    let isExpired = false;
+    if (cfg.deadline) {
+      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
+      if (!isNaN(dTime) && now > dTime) isExpired = true;
+    }
+    if (!cfg.enabled || isExpired) {
+      return json(res, 400, { error: '本次投票活动已结束或暂未开启' });
+    }
+    if (!key) return json(res, 400, { error: '请先挑选一张心仪的照片' });
+    if (!visitor) return json(res, 400, { error: '访客身份无效' });
+
+    // 校验 QQ 号: 必须是 5~13 位纯数字
+    if (!qq || !/^\d{5,13}$/.test(qq)) {
+      return json(res, 400, { error: '请输入有效的联系 QQ 号(5-13位数字),方便站长发放纪念礼' });
+    }
+
+    // 防刷票: 检查该 visitorId 是否已投过
+    if (store.voting.voters && store.voting.voters[visitor.id]) {
+      return json(res, 400, {
+        error: '你已经投过票了,每位访客限投一张照片',
+        votedKey: store.voting.voters[visitor.id].key
+      });
+    }
+
+    // 防刷票: 检查该 QQ 号是否已被使用
+    const qqUsed = Object.values(store.voting.voters || {}).some(v => v && v.qq === qq);
+    if (qqUsed) {
+      return json(res, 400, { error: '该 QQ 号已参与过本次投票,不可重复使用' });
+    }
+
+    // 入库记录
+    if (!store.voting.votes[key]) store.voting.votes[key] = [];
+    const voteRecord = {
+      visitorId: visitor.id,
+      name: visitor.name,
+      avatar: visitor.avatar,
+      qq,
+      ts: now
+    };
+    store.voting.votes[key].push(voteRecord);
+    store.voting.voters[visitor.id] = { key, qq, ts: now };
+
+    await persist();
+    return json(res, 200, {
+      ok: true,
+      message: '投票成功！感谢你的参与',
+      votedKey: key,
+      totalCount: store.voting.votes[key].length
+    });
+  }
+
+  // 3. 站长:保存修改活动配置
+  if (p === '/api/vote/admin/config' && req.method === 'POST') {
+    const body = await readBody(req);
+    const sid = clean(body.sid, 128);
+    const skey = clean(body.skey, 128);
+    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+      return json(res, 403, { error: '密钥校验未通过' });
+    }
+    if (!loaded) await loadStore();
+    const c = body.config || {};
+    store.voting.config = {
+      enabled: Boolean(c.enabled),
+      title: clean(c.title, 64) || '光影摄影评选',
+      rules: clean(c.rules, 500) || '',
+      deadline: clean(c.deadline, 32) || '',
+      reward: clean(c.reward, 100) || ''
+    };
+    await persist();
+    return json(res, 200, { ok: true, config: store.voting.config });
+  }
+
+  // 4. 站长:获取每张照片的得票明细与名单 (谁投的票, QQ 号是多少)
+  if (p === '/api/vote/admin/results' && req.method === 'POST') {
+    const body = await readBody(req);
+    const sid = clean(body.sid, 128);
+    const skey = clean(body.skey, 128);
+    if (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY)) {
+      return json(res, 403, { error: '密钥校验未通过' });
+    }
+    if (!loaded) await loadStore();
+
+    // 聚合得票排行
+    const ranking = [];
+    let totalVotes = 0;
+    const votesMap = store.voting.votes || {};
+    for (const [k, arr] of Object.entries(votesMap)) {
+      if (!Array.isArray(arr) || !arr.length) continue;
+      totalVotes += arr.length;
+      ranking.push({
+        key: k,
+        count: arr.length,
+        voters: arr.map(v => ({
+          name: v.name,
+          avatar: v.avatar,
+          qq: v.qq,
+          ts: v.ts
+        }))
+      });
+    }
+    ranking.sort((a, b) => b.count - a.count);
+
+    return json(res, 200, {
+      ok: true,
+      totalVotes,
+      voterCount: Object.keys(store.voting.voters || {}).length,
+      ranking,
+      config: store.voting.config
     });
   }
 
