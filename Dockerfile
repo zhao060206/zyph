@@ -4,10 +4,11 @@ WORKDIR /app
 
 # 先装依赖(利用 Docker 层缓存:改代码不会重装依赖)
 COPY package*.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev --no-audit --no-fund
 
 # 再复制源码
 COPY server.js index.html ./
+COPY public ./public
 
 EXPOSE 3000
 
