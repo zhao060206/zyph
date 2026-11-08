@@ -35,6 +35,13 @@ test('gallery, search, year filter, empty album and themes work without script e
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
   await expect(page.locator('.album-card')).toHaveCount(3);
+  await expect(page.locator('.contact-sheet')).toHaveCount(0);
+  await page.locator('[data-toggle-sheet="2026-10-25"]').click();
+  await expect(page.locator('.contact-sheet')).toHaveCount(1);
+  await expect(page.locator('[data-toggle-sheet="2026-10-25"]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-toggle-sheet="2025-06-08"]')).toHaveAttribute('aria-expanded', 'false');
+  await page.locator('[data-toggle-sheet="2026-10-25"]').click();
+  await expect(page.locator('.contact-sheet')).toHaveCount(0);
   await expect(page.locator('#heroTitle')).toHaveText('秋日园博园');
   await expect(page.locator('#voteNoticeModal')).toBeHidden();
   await page.locator('#archiveSearch').fill('杭州');

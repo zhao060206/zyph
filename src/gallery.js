@@ -1,6 +1,6 @@
-export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, featuredPhoto, Motion, openGroup, closeGroup, openAdmin }) {
+export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, featuredPhoto, Motion, openGroup, openProof, closeGroup, openAdmin }) {
   return {
-    expanded: false,
+    openDays: new Set(),
     init() {
       const filter = $('#yearFilter');
       const selected = filter.value;
@@ -17,6 +17,10 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       $('#heroExplore').disabled = !this.slides.length;
       if (this.slides.length) this.paintHero(0);
       $('#heroPrev').hidden = $('#heroNext').hidden = this.slides.length < 2;
+      const validDays = new Set(Store.groups.filter(g => g.gs.length).map(g => g.d));
+      for (const day of [...this.openDays]) {
+        if (!validDays.has(day)) this.openDays.delete(day);
+      }
       this.render();
       if (this.bound) return;
       this.bound = true;
@@ -27,6 +31,16 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       });
       filter.addEventListener('change', () => this.render());
       $('#years').addEventListener('click', event => {
+        const sheetBtn = event.target.closest('[data-toggle-sheet]');
+        if (sheetBtn) {
+          this.toggleSheet(sheetBtn.dataset.toggleSheet, sheetBtn.closest('.album-card'));
+          return;
+        }
+        const proof = event.target.closest('.proof[data-proof-idx]');
+        if (proof && openProof) {
+          openProof(proof.dataset.day, Number(proof.dataset.proofIdx));
+          return;
+        }
         const target = event.target.closest('[data-day]');
         if (target) openGroup(target.dataset.day);
       });
@@ -34,8 +48,14 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       $('#heroExplore').addEventListener('click', () => feature.click());
       $('#heroPrev').addEventListener('click', () => this.paintHero((this.heroIndex - 1 + this.slides.length) % this.slides.length));
       $('#heroNext').addEventListener('click', () => this.paintHero((this.heroIndex + 1) % this.slides.length));
-      $('#expandAll').addEventListener('click', () => { this.expanded = true; this.render(); });
-      $('#collapseAll').addEventListener('click', () => { this.expanded = false; this.render(); });
+      $('#expandAll').addEventListener('click', () => {
+        Store.groups.forEach(g => { if (g.gs.length) this.openDays.add(g.d); });
+        this.render();
+      });
+      $('#collapseAll').addEventListener('click', () => {
+        this.openDays.clear();
+        this.render();
+      });
       let taps = 0, timer;
       $('#brandHome').addEventListener('click', () => {
         clearTimeout(timer); taps++;
@@ -80,25 +100,65 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       img.hidden = false;
       img.src = navigator.connection && navigator.connection.saveData ? pURL(photo, 480) : pView(photo);
     },
+    sheetHTML(g, eager = false) {
+      return `<div class="album-inline"><div class="contact-sheet">${g.gs.map((p, j) => `<button class="proof" type="button" data-day="${g.d}" data-proof-idx="${j}" aria-label="查看 ${esc(p.t)}"><img src="${esc(pURL(p, 300))}" alt="${esc(p.t)}" loading="${eager && j < 16 ? 'eager' : 'lazy'}" decoding="async" width="300" height="300"><span class="pf-num">${String(j + 1).padStart(2, '0')}</span></button>`).join('')}</div></div>`;
+    },
+    syncToolbar(groups = Store.groups) {
+      const withPhotos = groups.filter(g => g.gs.length);
+      const openCount = withPhotos.filter(g => this.openDays.has(g.d)).length;
+      const allOpen = withPhotos.length > 0 && openCount === withPhotos.length;
+      const noneOpen = openCount === 0;
+      $('#expandAll').setAttribute('aria-pressed', String(allOpen));
+      $('#collapseAll').setAttribute('aria-pressed', String(noneOpen));
+    },
+    toggleSheet(day, card) {
+      const g = Store.groups.find(item => item.d === day);
+      if (!g || !g.gs.length) return;
+      const isOpen = !this.openDays.has(day);
+      if (isOpen) this.openDays.add(day);
+      else this.openDays.delete(day);
+      if (card) {
+        card.classList.toggle('is-sheet-open', isOpen);
+        const btn = card.querySelector('[data-toggle-sheet]');
+        if (btn) {
+          btn.classList.toggle('is-open', isOpen);
+          btn.setAttribute('aria-expanded', String(isOpen));
+          btn.setAttribute('aria-label', `${isOpen ? '收起' : '展开'} ${g.title} 印样`);
+          const label = btn.querySelector('span');
+          if (label) label.textContent = isOpen ? '收起印样' : '展开印样';
+        }
+        const existing = card.querySelector('.album-inline');
+        if (isOpen && !existing) card.insertAdjacentHTML('beforeend', this.sheetHTML(g, true));
+        else if (!isOpen && existing) existing.remove();
+      }
+      this.syncToolbar(this.currentGroups || Store.groups);
+    },
     render() {
       const query = $('#archiveSearch').value.trim().toLowerCase();
       const year = $('#yearFilter').value;
       const groups = Store.groups.filter(g => (!year || g.d.startsWith(year)) &&
         (!query || `${g.title} ${g.loc} ${g.d} ${g.c || ''}`.toLowerCase().includes(query)))
         .sort((a, b) => b.d.localeCompare(a.d));
+      this.currentGroups = groups;
       $('#resultCount').textContent = `${groups.length} 组 · ${groups.reduce((sum, g) => sum + g.gs.length, 0)} 张作品`;
-      $('#expandAll').setAttribute('aria-pressed', String(this.expanded));
-      $('#collapseAll').setAttribute('aria-pressed', String(!this.expanded));
-      $('#years').innerHTML = groups.length ? groups.map((g, i) => `
-        <article class="album-card" data-reveal>
-          <button class="album-cover${g.gs.length ? '' : ' album-cover-empty'}" data-day="${g.d}" aria-label="查看 ${esc(g.title)}">
-            ${g.gs.length ? `<img src="${esc(pURL(g.gs[0], 480))}" alt="${esc(g.gs[0].t)}" loading="lazy" decoding="async" width="480" height="360">` : `<span class="album-empty">${esc(g.title)}<br>时光留白</span>`}
+      this.syncToolbar(groups);
+      $('#years').innerHTML = groups.length ? groups.map((g, i) => {
+        const isOpen = g.gs.length > 0 && this.openDays.has(g.d);
+        return `
+        <article class="album-card${isOpen ? ' is-sheet-open' : ''}" data-reveal>
+          <button class="album-cover${g.gs.length ? '' : ' album-cover-empty'}" type="button" data-day="${g.d}" aria-label="查看 ${esc(g.title)}">
+            ${g.gs.length ? `<img src="${esc(pURL(g.gs[0], 480))}" alt="${esc(g.gs[0].t)}" loading="lazy" decoding="async" width="480" height="360">` : `<span class="album-empty"><span class="album-empty-ring" aria-hidden="true"></span><strong>${esc(g.title)}</strong><small>时光留白</small></span>`}
             <span class="album-index">${String(i + 1).padStart(2, '0')}</span>
+            <span class="album-frame-tag">${g.gs.length ? `${g.gs.length} 张` : '留白'}</span>
           </button>
-          <div class="album-meta"><time datetime="${g.d}">${g.d.replace(/-/g, '.')}</time><span>${g.gs.length} 张作品</span></div>
-          <h3><button class="album-title" data-day="${g.d}">${esc(g.title)}</button></h3>
-          ${this.expanded && g.gs.length ? `<div class="album-inline"><div class="contact-sheet">${g.gs.map((p, j) => `<button class="proof" data-day="${g.d}" aria-label="查看 ${esc(p.t)}"><img src="${esc(pURL(p, 300))}" alt="${esc(p.t)}" loading="lazy" decoding="async" width="300" height="300"><span class="pf-num">${String(j + 1).padStart(2, '0')}</span></button>`).join('')}</div></div>` : ''}
-        </article>`).join('') : '<p class="empty">没有找到匹配的作品，试试其他标题、地点或年份。</p>';
+          <div class="album-meta"><time datetime="${g.d}">${g.d.replace(/-/g, '.')}</time><span class="album-loc-meta">${esc(g.loc && g.loc !== '—' ? g.loc : `${g.gs.length} 张作品`)}</span></div>
+          <div class="album-title-row">
+            <h3><button class="album-title" type="button" data-day="${g.d}"><span>${esc(g.title)}</span><span class="album-open-icon" aria-hidden="true">↗</span></button></h3>
+            ${g.gs.length ? `<button class="album-sheet-btn${isOpen ? ' is-open' : ''}" type="button" data-toggle-sheet="${g.d}" aria-expanded="${isOpen}" aria-label="${isOpen ? '收起' : '展开'} ${esc(g.title)} 印样"><span>${isOpen ? '收起印样' : '展开印样'}</span></button>` : ''}
+          </div>
+          ${isOpen ? this.sheetHTML(g) : ''}
+        </article>`;
+      }).join('') : '<p class="empty">没有找到匹配的作品，试试其他标题、地点或年份。</p>';
       Motion.observe($('#years'));
     },
   };

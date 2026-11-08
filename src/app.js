@@ -285,18 +285,20 @@ const Store={
   },
   async init(){
     if(CONFIG.cosBucket){
-      try{
-        const r=await fetchWithTimeout(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'},9000);
-        if(r.ok){
-          const d=await r.json();
-          if(d&&Array.isArray(d.groups)){
-            const groups=d.groups.map(g=>this.normalizeGroup(g)).filter(Boolean);
-            this.groups=groups;
-            this.remote=true;
-            return true;
+      for(let attempt=0;attempt<2;attempt++){
+        try{
+          const r=await fetchWithTimeout(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'},9000);
+          if(r.ok){
+            const d=await r.json();
+            if(d&&Array.isArray(d.groups)){
+              const groups=d.groups.map(g=>this.normalizeGroup(g)).filter(Boolean);
+              this.groups=groups;
+              this.remote=true;
+              return true;
+            }
           }
-        }
-      }catch(e){}
+        }catch(e){}
+      }
     }
     return false;
   },
@@ -1445,7 +1447,7 @@ const Submission={
 
 /* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
 const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,featuredPhoto:CONFIG.featuredPhoto,Motion,
-  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),closeGroup:()=>Motion.transition(()=>GroupPage.close()),openAdmin:()=>Admin.open()});
+  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close()),openAdmin:()=>Admin.open()});
 
 /* ─── 组详情子页面 ─── */
 const GroupPage={
@@ -1504,7 +1506,10 @@ const GroupPage={
       <figure class="gp-preview-item" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
         <span class="gp-num">${String(i+1).padStart(2,'0')}</span>
         <div class="gp-thumb"><img src="${safeUrl(pURL(p,500))}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
-        ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
+        <div class="gp-card-foot">
+          <div class="gp-card-title-row"><span class="gp-card-title">${esc(p.t)}</span><span class="gp-card-arrow" aria-hidden="true">↗</span></div>
+          ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
+        </div>
       </figure>`).join('');
     if(this.g.d===$('#heroFeature').dataset.day&&$('#heroFeature').dataset.shared==='true'){const cover=this.previews.querySelector('img');if(cover)cover.style.viewTransitionName='featured-photo'}
     Motion.observe(this.previews);
@@ -3053,7 +3058,7 @@ Motion.start();
     btn.setAttribute('aria-checked',String(theme==='bright'));
     btn.setAttribute('aria-label',theme==='bright'?'切换到深色主题':'切换到浅色主题');
     const meta=document.querySelector('meta[name="theme-color"]');
-    if(meta)meta.content=theme==='bright'?'#f6f4ef':'#151d1a';
+    if(meta)meta.content=theme==='bright'?'#f7f6f2':'#09090b';
   };
   apply(storageGet('pt_theme','bright')==='dark'?'dark':'bright');
   btn.addEventListener('click',()=>{const theme=root.getAttribute('data-theme')==='bright'?'dark':'bright';apply(theme);storageSet('pt_theme',theme)});
