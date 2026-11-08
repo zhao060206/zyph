@@ -4,7 +4,11 @@
   "description": "Phototropic 摄影归档 · 带点赞与评论的在线站点",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/server.test.cjs",
+    "test:browser": "playwright test",
+    "check": "node --check server.js && npm run build && npm test"
   },
   "engines": {
     "node": ">=18"
@@ -17,6 +21,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "cos-nodejs-sdk-v5": "^2.14.6"
+    "cos-nodejs-sdk-v5": "^3.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "esbuild": "^0.28.2"
   }
 }

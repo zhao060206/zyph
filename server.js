@@ -19,6 +19,8 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
+const { promisify } = require('node:util');
 const COS = require('cos-nodejs-sdk-v5');
 
 /* ─────────── 配置 ─────────── */
@@ -28,11 +30,13 @@ const COS_SECRET_ID = process.env.COS_SECRET_ID || '';
 const COS_SECRET_KEY = process.env.COS_SECRET_KEY || '';
 const DATA_KEY = process.env.DATA_KEY || 'interactions.json';
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 
 const MAX_NAME = 24;
 const MAX_COMMENT = 500;
 const MAX_COMMENTS_PER_PHOTO = 500;
 const MAX_BODY = 64 * 1024;
+const MAX_SUBMISSION_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const cos = new COS({
   SecretId: COS_SECRET_ID,
@@ -72,6 +76,7 @@ function cosPut(key, text) {
         Key: key,
         Body: Buffer.from(text, 'utf8'),
         ContentType: 'application/json; charset=utf-8',
+        ACL: 'private',
       },
       (err, data) => (err ? reject(err) : resolve(data))
     );
@@ -121,24 +126,27 @@ function cosDelete(key) {
 }
 
 /* ─────────── 存储层:配置了 COS 就用 COS,否则退回本地文件(便于本机试用) ─────────── */
-const LOCAL_FILE = path.join(__dirname, 'data', 'interactions.json');
+const LOCAL_FILE = path.join(DATA_DIR, 'interactions.json');
 const useCos = Boolean(COS_SECRET_ID && COS_SECRET_KEY);
 
 function localGet() {
   try {
     return fs.readFileSync(LOCAL_FILE, 'utf8');
   } catch (e) {
-    return null; // 首次运行,文件还不存在
+    if (e.code === 'ENOENT') return null;
+    throw e;
   }
 }
 
 function localPut(text) {
   fs.mkdirSync(path.dirname(LOCAL_FILE), { recursive: true });
-  fs.writeFileSync(LOCAL_FILE, text, 'utf8');
+  const tmp = `${LOCAL_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, text, 'utf8');
+  fs.renameSync(tmp, LOCAL_FILE);
 }
 
 function localPutBuffer(key, buffer) {
-  const p = path.join(__dirname, 'data', key);
+  const p = dataPath(key);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, buffer);
 }
@@ -147,30 +155,37 @@ const storageGet = (key) => (useCos ? cosGet(key) : Promise.resolve(localGet()))
 const storagePut = (key, text) => (useCos ? cosPut(key, text) : Promise.resolve(localPut(text)));
 const storagePutBuffer = (key, buffer, type) => (useCos ? cosPutBuffer(key, buffer, type) : Promise.resolve(localPutBuffer(key, buffer)));
 
-/* 本地模式下的"删除":仅做存在性校验 */
-const storageDelete = (key) => (useCos ? cosDelete(key) : Promise.resolve({ local: true }));
+/* 本地模式下也真正删除文件,避免管理面板显示已删除但磁盘仍保留。 */
+const storageDelete = (key) => (useCos ? cosDelete(key) : Promise.resolve(localDelete(key)));
 
 /* ─────────── 数据层:内存缓存 + 写穿透 ─────────── */
-let store = { photos: {} };
+let store = {
+  photos: {},
+  voting: { config: null, votes: {}, voters: {} },
+  submissions: { config: null, items: [], authors: {} },
+};
 let loaded = false;
 let loadError = null;
 let writeChain = Promise.resolve();
+let lastPersisted = '';
+let loadPromise = null;
 
 const EMPTY = () => ({ likes: [], comments: [] });
 
 function normalize(raw) {
   const out = {
-    photos: {},
+    photos: Object.create(null),
     voting: {
       config: null,
-      votes: {},   // { [photoKey]: [ { visitorId, name, avatar, qq, ts } ] }
-      voters: {}   // { [visitorId]: { key, qq, ts } }
+      votes: Object.create(null),
+      voters: Object.create(null)
     },
     submissions: {
       config: null,
       items: [],   // [ { id, visitorId, name, avatar, qq, title, photos: [ { k, tn } ], ts } ]
-      authors: {}  // { [visitorId]: { id, qq, ts } }
-    }
+      authors: Object.create(null)
+    },
+    activityHistory: Array.isArray(raw && raw.activityHistory) ? raw.activityHistory : [],
   };
   if (raw && typeof raw === 'object') {
     if (raw.photos && typeof raw.photos === 'object') {
@@ -194,7 +209,7 @@ function normalize(raw) {
         }
       }
       if (raw.voting.voters && typeof raw.voting.voters === 'object') {
-        out.voting.voters = Object.assign({}, raw.voting.voters);
+        out.voting.voters = Object.assign(Object.create(null), raw.voting.voters);
       }
     }
     if (raw.submissions && typeof raw.submissions === 'object') {
@@ -205,18 +220,18 @@ function normalize(raw) {
         out.submissions.items = raw.submissions.items.filter(Boolean);
       }
       if (raw.submissions.authors && typeof raw.submissions.authors === 'object') {
-        out.submissions.authors = Object.assign({}, raw.submissions.authors);
+        out.submissions.authors = Object.assign(Object.create(null), raw.submissions.authors);
       }
     }
   }
   // 投票活动默认配置
   if (!out.voting.config) {
     out.voting.config = {
-      enabled: true,
-      title: '首届 Phototropic 最美光影瞬间评选',
-      rules: '每位访客可选心动的照片投票。请在投票时附上你的真实联系 QQ,活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！',
-      deadline: '2026-11-15 23:59',
-      reward: '摄影集纪念明信片',
+      enabled: false,
+      title: '摄影作品评选',
+      rules: '选择喜欢的摄影作品，每位访客每期参与一次。联系 QQ 仅供站长联系使用。',
+      deadline: '',
+      reward: '',
       maxVotes: 1
     };
   } else {
@@ -225,44 +240,75 @@ function normalize(raw) {
   // 作品征集活动默认配置 (1~3 张作品投递)
   if (!out.submissions.config) {
     out.submissions.config = {
-      enabled: true,
-      title: '首届 Phototropic 摄影作品征集邀约',
-      rules: '欢迎投稿 1~3 张你的原创摄影佳作！请在提交时附上联系 QQ，活动截止后站长将精选优秀作品在画廊专题展出，并联系作者送出精美纪念礼品！',
-      deadline: '2026-11-30 23:59',
-      reward: '精美摄影集一份 + 画廊专题署名展出',
+      enabled: false,
+      title: '摄影作品征集',
+      rules: '欢迎投递原创摄影作品，并留下联系 QQ 以便站长联系。每位访客每期参与一次。',
+      deadline: '',
+      reward: '',
       maxPhotos: 3
     };
   } else {
     out.submissions.config.maxPhotos = Math.min(3, Math.max(1, parseInt(out.submissions.config.maxPhotos, 10) || 3));
   }
+  for (const type of ['voting', 'submissions']) {
+    const cfg = out[type].config;
+    const legacy = !['draft', 'published', 'ended'].includes(cfg.status);
+    const existing = raw && raw[type] && raw[type].config;
+    cfg.status = legacy ? (existing ? (cfg.enabled ? 'published' : 'ended') : 'draft') : cfg.status;
+    cfg.eventId = cfg.eventId || `${type}_legacy`;
+    cfg.enabled = cfg.status === 'published';
+    if (type === 'voting') cfg.maxVotes = Math.min(20, Math.max(1, parseInt(cfg.maxVotes, 10) || 1));
+    if (legacy && cfg.status === 'ended' && !out.activityHistory.some(item => item.id === cfg.eventId)) {
+      const time = deadlineTime(cfg.deadline);
+      cfg.endedAt = Number.isFinite(time) && time < Date.now() ? time : null;
+      cfg.endReason = 'legacy';
+      out.activityHistory.unshift({ id: cfg.eventId, type, ...JSON.parse(JSON.stringify(out[type])) });
+    }
+  }
   return out;
 }
 
-async function loadStore() {
-  try {
-    const text = await storageGet(DATA_KEY);
-    store = normalize(text ? JSON.parse(text) : null);
-    loadError = null;
-    console.log(
-      `[store] 已载入互动数据: ${Object.keys(store.photos).length} 张照片有记录` +
-        ` (来源: ${useCos ? 'COS' : '本地文件'})`
-    );
-  } catch (e) {
-    loadError = e.message;
-    console.error('[store] 读取失败:', e.message);
-    if (!loaded) store = { photos: {} };
-  }
-  loaded = true;
+function loadStore() {
+  if (loadPromise) return loadPromise;
+  loadPromise = (async () => {
+    try {
+      const text = await storageGet(DATA_KEY);
+      const raw = text ? JSON.parse(text) : null;
+      if (text && (!raw || typeof raw !== 'object' || Array.isArray(raw))) throw new Error('互动数据结构无效');
+      store = normalize(raw);
+      lastPersisted = JSON.stringify(store);
+      loadError = null;
+      loaded = true;
+      console.log(`[store] 已载入互动数据: ${Object.keys(store.photos).length} 张照片有记录`);
+    } catch (e) {
+      loadError = e.message;
+      loaded = false;
+      console.error('[store] 读取失败:', e.message);
+      throw new HttpError(503, '互动数据暂时无法读取,请稍后重试');
+    }
+  })().finally(() => { loadPromise = null; });
+  return loadPromise;
 }
 
-/* 串行写队列:避免并发写互相覆盖 */
-function persist() {
-  writeChain = writeChain
-    .then(() => storagePut(DATA_KEY, JSON.stringify(store)))
-    .catch((e) => {
-      console.error('[store] 写入失败:', e.message);
-    });
-  return writeChain;
+/* 整个写请求串行执行,包含查重、上传与持久化,避免投稿在上传等待期间重复通过查重。 */
+async function persist() {
+  const text = JSON.stringify(store);
+  try {
+    await storagePut(DATA_KEY, text);
+    lastPersisted = text;
+  } catch (e) {
+    store = normalize(JSON.parse(lastPersisted));
+    console.error('[store] 写入失败:', e.message);
+    throw new HttpError(503, '数据未保存成功,请稍后重试');
+  }
+}
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
 }
 
 /* ─────────── 反滥用:按 IP 的简单滑动限流 ─────────── */
@@ -285,33 +331,47 @@ function json(res, code, obj) {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(body),
     'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
   });
   res.end(body);
 }
 
+const REQUEST_BODY = Symbol('parsed request body');
 function readBody(req, limit = MAX_BODY) {
+  if (req[REQUEST_BODY]) return Promise.resolve(req[REQUEST_BODY]);
   return new Promise((resolve, reject) => {
+    if (req.destroyed) return reject(new HttpError(400, '请求连接已中断'));
     let size = 0;
+    let tooLarge = false;
     const chunks = [];
     req.on('data', (c) => {
+      if (tooLarge) return;
       size += c.length;
       if (size > limit) {
-        reject(new Error('请求体过大'));
-        req.destroy();
+        tooLarge = true;
+        reject(new HttpError(413, '请求体过大'));
+        // 继续排空请求,让服务器能稳定返回 413,而不是直接重置连接。
+        req.resume();
         return;
       }
       chunks.push(c);
     });
     req.on('end', () => {
+      if (tooLarge) return;
       const t = Buffer.concat(chunks).toString('utf8');
       if (!t) return resolve({});
       try {
-        resolve(JSON.parse(t));
+        const parsed = JSON.parse(t);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new HttpError(400, '请求体必须是 JSON 对象');
+        }
+        resolve(parsed);
       } catch (e) {
-        reject(new Error('请求格式错误'));
+        reject(e instanceof HttpError ? e : new HttpError(400, '请求格式错误'));
       }
     });
     req.on('error', reject);
+    req.on('aborted', () => reject(new HttpError(400, '请求连接已中断')));
   });
 }
 
@@ -337,7 +397,7 @@ const clientIp = (req) =>
 function normalizeVisitor(v) {
   if (!v || typeof v !== 'object') return null;
   const id = clean(v.id, 64);
-  if (!id) return null;
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) return null;
   return {
     id,
     name: clean(v.name, MAX_NAME) || '匿名的追光者',
@@ -345,21 +405,236 @@ function normalizeVisitor(v) {
   };
 }
 
-/* ─────────── 静态文件托管 ─────────── */
-function serveIndex(res) {
-  fs.readFile(path.join(__dirname, 'index.html'), (err, buf) => {
-    if (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end('index.html 读取失败:' + err.message);
-      return;
+function parseDataImage(value) {
+  const m = String(value || '').match(
+    /^data:(image\/(?:jpeg|jpg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/i
+  );
+  if (!m) return null;
+  const buffer = Buffer.from(m[2], 'base64');
+  if (!buffer.length) return null;
+  if (buffer.length > MAX_SUBMISSION_IMAGE_BYTES) {
+    throw new HttpError(413, '单张投稿图片不能超过 8MB');
+  }
+  const mime = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase();
+  const ext = mime === 'image/jpeg' ? 'jpg' : mime.slice('image/'.length);
+  const signatureOk = {
+    'image/jpeg': buffer.subarray(0, 3).equals(Buffer.from([255, 216, 255])),
+    'image/png': buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+    'image/gif': /^(GIF87a|GIF89a)$/.test(buffer.subarray(0, 6).toString('ascii')),
+    'image/webp': buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP',
+  }[mime];
+  if (!signatureOk) return null;
+  return { buffer, mime, ext };
+}
+
+function requireAdmin(body) {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (token && safeEqual(body.token || '', token)) return;
+  if (useCos && safeEqual(body.sid || '', COS_SECRET_ID) && safeEqual(body.skey || '', COS_SECRET_KEY)) return;
+  if (!useCos && !token) throw new HttpError(503, '未配置管理员凭据');
+  throw new HttpError(403, '密钥校验未通过');
+}
+
+// datetime-local 不含时区;活动统一按中国/新加坡时间解释,不依赖部署机时区。
+function deadlineTime(value) {
+  if (!value) return Infinity;
+  const text = String(value).trim().replace(' ', 'T');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(text)) return NaN;
+  const time = Date.parse(text + '+08:00');
+  if (!Number.isFinite(time)) return NaN;
+  const normalized = new Date(time + 8 * 3600000).toISOString().slice(0, text.length);
+  return normalized === text ? time : NaN;
+}
+
+function eventExpired(config) {
+  const time = deadlineTime(config.deadline);
+  return Number.isNaN(time) || Date.now() >= time;
+}
+
+function publicInteractions(visitorId, keys = []) {
+  const entries = keys.length ? [...new Set(keys)].slice(0, 50).map(key => [key, store.photos[key] || EMPTY()]) : Object.entries(store.photos);
+  return { photos: Object.fromEntries(entries.map(([key, rec]) => [key, {
+    likes: rec.likes.map(({ name, avatar, ts, id }) => ({ name, avatar, ts, mine: id === visitorId })),
+    comments: rec.comments.map(({ id, name, avatar, text, ts, visitorId: owner }) =>
+      ({ id, name, avatar, text, ts, mine: owner === visitorId })),
+  }])) };
+}
+
+let galleryCache = null;
+async function eligiblePhotoKeys() {
+  if (galleryCache && Date.now() - galleryCache.loadedAt < 15000) return galleryCache.keys;
+  let data;
+  try {
+    const local = path.join(DATA_DIR, 'gallery.json');
+    if (!useCos && fs.existsSync(local)) data = JSON.parse(await fs.promises.readFile(local, 'utf8'));
+    else {
+      const response = await fetch(`https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/data.json`, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('归档读取失败');
+      data = await response.json();
     }
-    res.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Length': buf.length,
-      'Cache-Control': 'no-cache',
+    if (!data || !Array.isArray(data.groups)) throw new Error('归档格式无效');
+    const keys = new Set();
+    for (const group of data.groups) for (const photo of group.gs || []) {
+      if (photo.k) keys.add(photo.k);
+      else if (photo.u) keys.add(`${group.d}#${photo.u}`);
+    }
+    galleryCache = { keys, loadedAt: Date.now() };
+    return keys;
+  } catch (error) {
+    throw new HttpError(503, '作品目录暂时无法校验,请稍后再投票');
+  }
+}
+
+function activitySummary(type, activity) {
+  const config = activity.config || {};
+  return {
+    type, config,
+    participants: type === 'voting' ? Object.keys(activity.voters || {}).length : Object.keys(activity.authors || {}).length,
+    count: type === 'voting'
+      ? Object.values(activity.votes || {}).reduce((sum, arr) => sum + arr.length, 0)
+      : (activity.items || []).reduce((sum, item) => sum + (item.photos || []).length, 0),
+  };
+}
+
+function endActivity(type, reason) {
+  const activity = store[type];
+  if (activity.config.status !== 'published') return false;
+  activity.config = { ...activity.config, status: 'ended', enabled: false,
+    endedAt: reason === 'deadline' ? deadlineTime(activity.config.deadline) : Date.now(), endReason: reason };
+  if (!store.activityHistory.some(item => item.id === activity.config.eventId)) {
+    store.activityHistory.unshift({
+      id: activity.config.eventId, type,
+      ...JSON.parse(JSON.stringify(activity)),
     });
-    res.end(buf);
-  });
+  }
+  return true;
+}
+
+function publicActivities() {
+  return {
+    current: ['voting', 'submissions'].map(type => activitySummary(type, store[type]))
+      .filter(item => item.config.status !== 'draft'),
+    history: store.activityHistory.map(item => activitySummary(item.type, item)),
+  };
+}
+
+function updateActivityConfig(type, input) {
+  const previous = store[type].config;
+  const deadline = clean(input.deadline, 32);
+  if (deadline && Number.isNaN(deadlineTime(deadline))) throw new HttpError(400, '截止时间无效');
+  const config = {
+    ...previous,
+    title: clean(input.title, 64) || (type === 'voting' ? '摄影作品评选' : '摄影作品征集'),
+    rules: clean(input.rules, 1000), deadline,
+    reward: clean(input.reward, 100),
+  };
+  if (type === 'voting') config.maxVotes = Math.min(20, Math.max(1, parseInt(input.maxVotes, 10) || 1));
+  else config.maxPhotos = Math.min(3, Math.max(1, parseInt(input.maxPhotos, 10) || 3));
+  store[type].config = config;
+  return config;
+}
+
+function manageActivity(type, action, input = {}) {
+  if (!['voting', 'submissions'].includes(type)) throw new HttpError(400, '活动类型无效');
+  const activity = store[type];
+  if (action === 'new') {
+    if (activity.config.status === 'published') throw new HttpError(409, '请先结束当前活动,再新建下一期');
+    if (activity.config.status === 'draft') throw new HttpError(409, '当前已有草稿,请编辑或发布');
+    const config = { ...activity.config, eventId: `${type}_${crypto.randomUUID()}`, status: 'draft', enabled: false,
+      createdAt: Date.now(), publishedAt: null, endedAt: null, endReason: null, deadline: '' };
+    store[type] = type === 'voting' ? { config, votes: Object.create(null), voters: Object.create(null) }
+      : { config, items: [], authors: Object.create(null) };
+  } else if (action === 'end') {
+    if (!endActivity(type, 'manual')) throw new HttpError(409, '只有已发布的活动可以结束');
+  } else if (action === 'save' || action === 'publish') {
+    if (activity.config.status === 'ended') throw new HttpError(409, '活动已结束并留档,请新建下一期');
+    const config = updateActivityConfig(type, input);
+    if (action === 'publish') {
+      if (config.status !== 'draft') throw new HttpError(409, '活动已经发布');
+      if (eventExpired(config)) throw new HttpError(400, '截止时间必须晚于当前时间');
+      config.eventId = `${type}_${crypto.randomUUID()}`;
+      config.status = 'published';
+      config.enabled = true;
+      config.publishedAt = Date.now();
+    } else if (config.status === 'published' && eventExpired(config)) {
+      throw new HttpError(400, '截止时间必须晚于当前时间,提前结束请使用结束活动');
+    }
+  } else throw new HttpError(400, '活动操作无效');
+}
+
+/* ─────────── 静态文件托管 ─────────── */
+function dataPath(key) {
+  const root = path.resolve(DATA_DIR);
+  const fp = path.resolve(root, String(key || '').replace(/^[/\\]+/, ''));
+  if (fp !== root && !fp.startsWith(root + path.sep)) {
+    throw new HttpError(400, '文件标识无效');
+  }
+  return fp;
+}
+
+function localDelete(key) {
+  const fp = dataPath(key);
+  if (path.resolve(fp) === path.resolve(LOCAL_FILE)) {
+    throw new HttpError(400, '不能删除互动数据文件');
+  }
+  fs.rmSync(fp, { force: true });
+  return { local: true };
+}
+
+function contentTypeFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+  }[ext] || 'application/octet-stream';
+}
+
+const assetCache = new Map();
+const gzip = promisify(zlib.gzip);
+const brotliCompress = promisify(zlib.brotliCompress);
+const publicFiles = new Map([
+  ['/', ['index.html', 'text/html; charset=utf-8']],
+  ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
+  ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
+]);
+
+async function serveAsset(req, res, filename, type) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: '请求方法不支持' });
+  const fp = path.join(__dirname, filename);
+  const stat = await fs.promises.stat(fp);
+  let cached = assetCache.get(filename);
+  if (!cached || cached.mtime !== stat.mtimeMs) {
+    const raw = await fs.promises.readFile(fp);
+    const [gz, br] = await Promise.all([gzip(raw), brotliCompress(raw)]);
+    cached = { mtime: stat.mtimeMs, raw, gzip: gz, br,
+      hash: crypto.createHash('sha256').update(raw).digest('hex').slice(0, 24) };
+    assetCache.set(filename, cached);
+  }
+  const encodings = String(req.headers['accept-encoding'] || '').split(',').map(part => {
+    const [name, ...params] = part.trim().split(';');
+    const quality = params.find(item => item.trim().startsWith('q='));
+    return { name, q: quality ? Number(quality.trim().slice(2)) : 1 };
+  }).filter(item => item.q > 0).sort((a, b) => b.q - a.q || (b.name === 'br' ? 1 : 0) - (a.name === 'br' ? 1 : 0));
+  const encoding = encodings.find(item => item.name === 'br' || item.name === 'gzip');
+  const name = encoding ? encoding.name : 'raw';
+  const etag = `"${cached.hash}-${name}"`;
+  const headers = {
+    'Content-Type': type, 'Cache-Control': 'no-cache', ETag: etag, Vary: 'Accept-Encoding',
+    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin',
+  };
+  if (name !== 'raw') headers['Content-Encoding'] = name;
+  if (String(req.headers['if-none-match'] || '').split(',').some(item => item.trim().replace(/^W\//, '') === etag)) {
+    res.writeHead(304, headers);
+    return res.end();
+  }
+  const buf = cached[name];
+  res.writeHead(200, { ...headers, 'Content-Length': buf.length });
+  res.end(req.method === 'HEAD' ? undefined : buf);
 }
 
 /* ─────────── 路由 ─────────── */
@@ -369,8 +644,8 @@ async function handle(req, res) {
   const ip = clientIp(req);
 
   if (p === '/api/health') {
-    return json(res, 200, {
-      ok: true,
+    return json(res, loaded && !loadError ? 200 : 503, {
+      ok: loaded && !loadError,
       loaded,
       storage: useCos ? 'cos' : 'local',
       cosConfigured: useCos,
@@ -379,9 +654,40 @@ async function handle(req, res) {
     });
   }
 
+  if (p.startsWith('/api/') && !loaded) await loadStore();
+
+  if (p.startsWith('/api/')) {
+    let ended = false;
+    for (const type of ['voting', 'submissions']) {
+      if (store[type].config.status === 'published' && eventExpired(store[type].config)) {
+        ended = endActivity(type, 'deadline') || ended;
+      }
+    }
+    if (ended) await persist();
+  }
+
+  if (p === '/api/activities' && req.method === 'GET') return json(res, 200, publicActivities());
+
+  if (p === '/api/activities/admin' && req.method === 'POST') {
+    const body = await readBody(req);
+    requireAdmin(body);
+    if (body.action === 'history') {
+      const record = store.activityHistory.find(item => item.id === body.id);
+      if (!record) throw new HttpError(404, '活动记录不存在');
+      return json(res, 200, { ok: true, record });
+    }
+    if (body.action && body.action !== 'list') {
+      manageActivity(body.type, body.action, body.config);
+      await persist();
+    }
+    return json(res, 200, { ok: true,
+      current: ['voting', 'submissions'].map(type => activitySummary(type, store[type])),
+      history: store.activityHistory.map(item => activitySummary(item.type, item)),
+    });
+  }
+
   if (p === '/api/interactions' && req.method === 'GET') {
-    if (!loaded) await loadStore();
-    return json(res, 200, store);
+    return json(res, 200, publicInteractions(clean(url.searchParams.get('vid'), 64), url.searchParams.getAll('key').map(key => clean(key, 512)).filter(Boolean)));
   }
 
   if (p === '/api/like' && req.method === 'POST') {
@@ -394,7 +700,6 @@ async function handle(req, res) {
     if (!key) return json(res, 400, { error: '缺少照片标识' });
     if (!visitor) return json(res, 400, { error: '身份信息无效' });
 
-    if (!loaded) await loadStore();
     const rec = store.photos[key] || (store.photos[key] = EMPTY());
     const i = rec.likes.findIndex((l) => l && l.id === visitor.id);
     let liked;
@@ -426,7 +731,6 @@ async function handle(req, res) {
     if (!visitor) return json(res, 400, { error: '身份信息无效' });
     if (!text) return json(res, 400, { error: '评论内容不能为空' });
 
-    if (!loaded) await loadStore();
     const rec = store.photos[key] || (store.photos[key] = EMPTY());
     const item = {
       id: 'c_' + Date.now().toString(36) + '_' + crypto.randomBytes(3).toString('hex'),
@@ -452,7 +756,6 @@ async function handle(req, res) {
     const key = clean(body.key, 512);
     const id = clean(body.id, 64);
     if (!key || !id) return json(res, 400, { error: '参数不完整' });
-    if (!loaded) await loadStore();
 
     const rec = store.photos[key];
     if (!rec) return json(res, 200, { ok: true });
@@ -461,7 +764,7 @@ async function handle(req, res) {
     if (!target) return json(res, 200, { ok: true });
 
     const adminToken = process.env.ADMIN_TOKEN || '';
-    const tokenOk = adminToken && clean(body.token, 200) === adminToken;
+    const tokenOk = adminToken && safeEqual(clean(body.token, 200), adminToken);
     const me = normalizeVisitor(body.visitor);
     const ownerOk = me && target.visitorId === me.id;
 
@@ -490,24 +793,23 @@ async function handle(req, res) {
      * 后端校验它与服务器上的密钥一致即放行 —— 站长无需额外设置或输入任何口令,
      * 体验与上传完全一致;而外部访客拿不到密钥,也就删不了文件。
      */
-    const sid = clean(body.sid, 128);
-    const skey = clean(body.skey, 128);
-    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
-      return json(res, 403, {
-        error: '密钥校验未通过',
-        hint: '请先在「站点设置」里保存 COS 密钥(与上传照片用的是同一对)。',
-      });
-    }
+    requireAdmin(body);
 
     // 支持单个或多个 key
     const keys = (Array.isArray(body.keys) ? body.keys : [body.key])
       .map((k) => clean(k, 512))
-      .filter(Boolean)
-      .slice(0, 200);
+      .filter(Boolean);
     if (!keys.length) return json(res, 400, { error: '缺少要删除的文件标识' });
+    if (keys.length > 200) throw new HttpError(400, '单次最多删除 200 个文件');
+    if (keys.some(key => !/^(photos|submissions|music)\//.test(key) || key.includes('..') || key.includes('\\'))) {
+      throw new HttpError(400, '只能删除照片、投稿或音乐文件');
+    }
 
     const results = [];
-    for (const k of keys) {
+    let cursor = 0;
+    const worker = async () => {
+    while (cursor < keys.length) {
+      const k = keys[cursor++];
       try {
         await storageDelete(k);
         results.push({ key: k, ok: true });
@@ -516,6 +818,8 @@ async function handle(req, res) {
         results.push({ key: k, ok: false, error: e.message });
       }
     }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, keys.length) }, worker));
     const failed = results.filter((r) => !r.ok);
     return json(res, failed.length && failed.length === results.length ? 500 : 200, {
       ok: failed.length === 0,
@@ -529,14 +833,9 @@ async function handle(req, res) {
 
   // 1. 公开:读取活动配置与截止状态
   if (p === '/api/vote/config' && req.method === 'GET') {
-    if (!loaded) await loadStore();
     const cfg = store.voting.config || {};
     const now = Date.now();
-    let isExpired = false;
-    if (cfg.deadline) {
-      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
-      if (!isNaN(dTime) && now > dTime) isExpired = true;
-    }
+    const isExpired = eventExpired(cfg);
     const vid = clean(url.searchParams.get('vid'), 64);
     let userVoted = false;
     let votedKeys = [];
@@ -548,6 +847,8 @@ async function handle(req, res) {
     return json(res, 200, {
       enabled: Boolean(cfg.enabled) && !isExpired,
       rawEnabled: Boolean(cfg.enabled),
+      status: cfg.status, eventId: cfg.eventId, endedAt: cfg.endedAt || null,
+      deadlineZone: '+08:00',
       isExpired,
       title: cfg.title || '最美光影评选',
       rules: cfg.rules || '',
@@ -571,15 +872,11 @@ async function handle(req, res) {
     const visitor = normalizeVisitor(body.visitor);
     const qq = clean(body.qq, 20);
 
-    if (!loaded) await loadStore();
     const cfg = store.voting.config || {};
     const maxVotes = Math.max(1, parseInt(cfg.maxVotes, 10) || 1);
+    if (body.eventId && body.eventId !== cfg.eventId) throw new HttpError(409, '活动已更新,请刷新后参与');
     const now = Date.now();
-    let isExpired = false;
-    if (cfg.deadline) {
-      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
-      if (!isNaN(dTime) && now > dTime) isExpired = true;
-    }
+    const isExpired = eventExpired(cfg);
     if (!cfg.enabled || isExpired) {
       return json(res, 400, { error: '本次投票活动已结束或暂未开启' });
     }
@@ -611,6 +908,9 @@ async function handle(req, res) {
       return json(res, 400, { error: '该 QQ 号已参与过本次投票,不可重复使用' });
     }
 
+    const eligible = await eligiblePhotoKeys();
+    if (keys.some(key => !eligible.has(key))) throw new HttpError(400, '所选作品不在当前归档中,请刷新后选择');
+
     // 入库记录 (所选照片分别增加得票)
     const voteRecord = {
       visitorId: visitor.id,
@@ -638,21 +938,12 @@ async function handle(req, res) {
   // 3. 站长:保存修改活动配置
   if (p === '/api/vote/admin/config' && req.method === 'POST') {
     const body = await readBody(req);
-    const sid = clean(body.sid, 128);
-    const skey = clean(body.skey, 128);
-    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
-      return json(res, 403, { error: '密钥校验未通过' });
-    }
-    if (!loaded) await loadStore();
+    requireAdmin(body);
     const c = body.config || {};
-    store.voting.config = {
-      enabled: Boolean(c.enabled),
-      title: clean(c.title, 64) || '光影摄影评选',
-      rules: clean(c.rules, 500) || '',
-      deadline: clean(c.deadline, 32) || '',
-      reward: clean(c.reward, 100) || '',
-      maxVotes: Math.max(1, parseInt(c.maxVotes, 10) || 1)
-    };
+    const current = store.voting.config;
+    if (c.enabled) manageActivity('voting', current.status === 'draft' ? 'publish' : 'save', c);
+    else if (current.status === 'published') manageActivity('voting', 'end');
+    else manageActivity('voting', 'save', c);
     await persist();
     return json(res, 200, { ok: true, config: store.voting.config });
   }
@@ -660,12 +951,7 @@ async function handle(req, res) {
   // 4. 站长:获取每张照片的得票明细与名单 (谁投的票, QQ 号是多少)
   if (p === '/api/vote/admin/results' && req.method === 'POST') {
     const body = await readBody(req);
-    const sid = clean(body.sid, 128);
-    const skey = clean(body.skey, 128);
-    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
-      return json(res, 403, { error: '密钥校验未通过' });
-    }
-    if (!loaded) await loadStore();
+    requireAdmin(body);
 
     // 聚合得票排行
     const ranking = [];
@@ -700,14 +986,9 @@ async function handle(req, res) {
 
   // 1. 公开:读取征集活动配置与访客投稿状态
   if (p === '/api/submission/config' && req.method === 'GET') {
-    if (!loaded) await loadStore();
     const cfg = store.submissions.config || {};
     const now = Date.now();
-    let isExpired = false;
-    if (cfg.deadline) {
-      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
-      if (!isNaN(dTime) && now > dTime) isExpired = true;
-    }
+    const isExpired = eventExpired(cfg);
     const vid = clean(url.searchParams.get('vid'), 64);
     let userSubmitted = false;
     let submittedItem = null;
@@ -719,12 +1000,15 @@ async function handle(req, res) {
     return json(res, 200, {
       enabled: Boolean(cfg.enabled) && !isExpired,
       rawEnabled: Boolean(cfg.enabled),
+      status: cfg.status, eventId: cfg.eventId, endedAt: cfg.endedAt || null,
+      deadlineZone: '+08:00',
       isExpired,
       title: cfg.title || '摄影作品征集邀约',
       rules: cfg.rules || '',
       deadline: cfg.deadline || '',
       reward: cfg.reward || '',
       maxPhotos: Math.min(3, Math.max(1, parseInt(cfg.maxPhotos, 10) || 3)),
+      storage: useCos ? 'cos' : 'local',
       userSubmitted,
       submittedItem
     });
@@ -742,15 +1026,11 @@ async function handle(req, res) {
     const title = clean(body.title, 40) || '原创摄影作品';
     const photosRaw = Array.isArray(body.photos) ? body.photos : [];
 
-    if (!loaded) await loadStore();
     const cfg = store.submissions.config || {};
     const maxPhotos = Math.min(3, Math.max(1, parseInt(cfg.maxPhotos, 10) || 3));
+    if (body.eventId && body.eventId !== cfg.eventId) throw new HttpError(409, '活动已更新,请刷新后参与');
     const now = Date.now();
-    let isExpired = false;
-    if (cfg.deadline) {
-      const dTime = new Date(cfg.deadline.replace(/-/g, '/')).getTime();
-      if (!isNaN(dTime) && now > dTime) isExpired = true;
-    }
+    const isExpired = eventExpired(cfg);
     if (!cfg.enabled || isExpired) {
       return json(res, 400, { error: '本次作品征集活动已结束或暂未开启' });
     }
@@ -777,34 +1057,40 @@ async function handle(req, res) {
       return json(res, 400, { error: '该 QQ 号已参与过投稿,不可重复使用' });
     }
 
+    // 全部校验通过后再上传,不把一批坏文件中的前几张当成完整投稿提交。
+    const parsedPhotos = photosRaw.map(item => {
+      const main = item && parseDataImage(item.data);
+      const thumbnail = item && item.tn ? parseDataImage(item.tn) : null;
+      if (!main || (item.tn && !thumbnail)) throw new HttpError(400, '照片格式无效,请使用 JPEG、PNG、WebP 或 GIF');
+      return { item, main, thumbnail };
+    });
+
     // 处理并存储 1~3 张照片 (转为 Buffer 并上传至 COS 的 submissions/ 目录)
     const subId = 'sub_' + now.toString(36) + '_' + crypto.randomBytes(3).toString('hex');
     const yyyymm = new Date().toISOString().slice(0, 7).replace(/-/g, '');
     const savedPhotos = [];
+    const uploadedKeys = [];
 
-    for (let i = 0; i < photosRaw.length; i++) {
-      const pItem = photosRaw[i];
-      if (!pItem || !pItem.data) continue;
+    try {
+    for (let i = 0; i < parsedPhotos.length; i++) {
+      const { item: pItem, main: mainParsed, thumbnail: tnParsed } = parsedPhotos[i];
       // 解析高清图
-      const mainParsed = pItem.data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-      if (!mainParsed) continue;
-      const ext = mainParsed[1].toLowerCase() === 'jpeg' ? 'jpg' : mainParsed[1].toLowerCase();
-      const mainBuf = Buffer.from(mainParsed[2], 'base64');
+      const ext = mainParsed.ext;
+      const mainBuf = mainParsed.buffer;
       const mainKey = `submissions/${yyyymm}/${subId}_${i + 1}.${ext}`;
 
       // 解析缩略图 (若前端已生成 480px 小图)
       let tnKey = null;
-      if (pItem.tn) {
-        const tnParsed = pItem.tn.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
-        if (tnParsed) {
-          const tnExt = tnParsed[1].toLowerCase() === 'jpeg' ? 'jpg' : tnParsed[1].toLowerCase();
-          const tnBuf = Buffer.from(tnParsed[2], 'base64');
+      if (tnParsed) {
+          const tnExt = tnParsed.ext;
+          const tnBuf = tnParsed.buffer;
           tnKey = `submissions/${yyyymm}/${subId}_${i + 1}_t480.${tnExt}`;
-          await storagePutBuffer(tnKey, tnBuf, 'image/' + tnExt);
-        }
+          uploadedKeys.push(tnKey);
+          await storagePutBuffer(tnKey, tnBuf, tnParsed.mime);
       }
 
-      await storagePutBuffer(mainKey, mainBuf, 'image/' + ext);
+      uploadedKeys.push(mainKey);
+      await storagePutBuffer(mainKey, mainBuf, mainParsed.mime);
       savedPhotos.push({
         k: mainKey,
         tn: tnKey || mainKey,
@@ -837,26 +1123,22 @@ async function handle(req, res) {
       message: '作品投稿成功！感谢你的创作与分享',
       item: submissionRecord
     });
+    } catch (error) {
+      const cleanup = await Promise.allSettled(uploadedKeys.map(key => storageDelete(key)));
+      if (cleanup.some(item => item.status === 'rejected')) console.error('[submission] 部分临时图片清理失败');
+      throw error;
+    }
   }
 
   // 3. 站长:保存修改征集活动配置
   if (p === '/api/submission/admin/config' && req.method === 'POST') {
     const body = await readBody(req);
-    const sid = clean(body.sid, 128);
-    const skey = clean(body.skey, 128);
-    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
-      return json(res, 403, { error: '密钥校验未通过' });
-    }
-    if (!loaded) await loadStore();
+    requireAdmin(body);
     const c = body.config || {};
-    store.submissions.config = {
-      enabled: Boolean(c.enabled),
-      title: clean(c.title, 64) || '摄影作品征集邀约',
-      rules: clean(c.rules, 500) || '',
-      deadline: clean(c.deadline, 32) || '',
-      reward: clean(c.reward, 100) || '',
-      maxPhotos: Math.min(3, Math.max(1, parseInt(c.maxPhotos, 10) || 3))
-    };
+    const current = store.submissions.config;
+    if (c.enabled) manageActivity('submissions', current.status === 'draft' ? 'publish' : 'save', c);
+    else if (current.status === 'published') manageActivity('submissions', 'end');
+    else manageActivity('submissions', 'save', c);
     await persist();
     return json(res, 200, { ok: true, config: store.submissions.config });
   }
@@ -864,12 +1146,7 @@ async function handle(req, res) {
   // 4. 站长:获取所有征集作品明细与投稿人 QQ 清单
   if (p === '/api/submission/admin/list' && req.method === 'POST') {
     const body = await readBody(req);
-    const sid = clean(body.sid, 128);
-    const skey = clean(body.skey, 128);
-    if (useCos && (!sid || !skey || !safeEqual(sid, COS_SECRET_ID) || !safeEqual(skey, COS_SECRET_KEY))) {
-      return json(res, 403, { error: '密钥校验未通过' });
-    }
-    if (!loaded) await loadStore();
+    requireAdmin(body);
 
     const items = store.submissions.items || [];
     const totalPhotos = items.reduce((s, it) => s + (it.photos || []).length, 0);
@@ -887,31 +1164,63 @@ async function handle(req, res) {
   // 本地模式下读取投稿图片
   if (p.startsWith('/submissions/') || p.startsWith('/data/submissions/')) {
     const cleanRel = p.replace(/^\/data\//, '').replace(/^\//, '');
-    const fp = path.join(__dirname, 'data', cleanRel);
-    if (fs.existsSync(fp)) {
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
-      return fs.createReadStream(fp).pipe(res);
+    try {
+      const fp = dataPath(cleanRel);
+      if (fs.existsSync(fp)) {
+        res.writeHead(200, {
+          'Content-Type': contentTypeFor(fp),
+          'Cache-Control': 'public, max-age=86400, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        return fs.createReadStream(fp).pipe(res);
+      }
+    } catch (e) {
+      if (e instanceof HttpError) return json(res, e.status, { error: e.message });
     }
   }
 
-  if (p === '/' || p === '/index.html') {
-    if (!loaded) loadStore().catch(() => {});
-    return serveIndex(res);
-  }
+  if (publicFiles.has(p)) return serveAsset(req, res, ...publicFiles.get(p));
 
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('未找到');
 }
 
 const server = http.createServer((req, res) => {
-  handle(req, res).catch((e) => {
-    console.error('[error]', req.method, req.url, e.message);
-    if (!res.headersSent) json(res, 500, { error: e.message || '服务器错误' });
+  const dispatch = async () => {
+    let pathname;
+    try { pathname = new URL(req.url, 'http://localhost').pathname; }
+    catch (error) { throw new HttpError(400, '请求地址无效'); }
+    const isApi = pathname.startsWith('/api/') && pathname !== '/api/health';
+    // 接收请求体不占用存储事务队列,手机上传中断不会阻塞其他访客。
+    if (isApi && req.method === 'POST') {
+      req[REQUEST_BODY] = await readBody(req, pathname === '/api/submission/submit' ? 16 * 1024 * 1024 : MAX_BODY);
+    }
+    const run = async () => {
+      if (req.destroyed && !req.complete) return;
+      try { await handle(req, res); }
+      catch (e) {
+        if (isApi && lastPersisted) store = normalize(JSON.parse(lastPersisted));
+        throw e;
+      }
+    };
+    const task = isApi ? writeChain.then(run) : run();
+    if (isApi) writeChain = task.catch(() => {});
+    await task;
+  };
+  dispatch().catch((e) => {
+    console.error('[error]', req.method, String(req.url).split('?')[0], e.message);
+    if (!res.headersSent && !res.destroyed) {
+      const status = e instanceof HttpError ? e.status : 500;
+      json(res, status, { error: status < 500 || e instanceof HttpError ? e.message : '服务器暂时无法处理请求' });
+    }
   });
 });
+server.requestTimeout = 60000;
 
-server.listen(PORT, () => {
+if (require.main === module) server.listen(PORT, () => {
   console.log(`Phototropic 已启动 · 端口 ${PORT}`);
   console.log(`数据存储: ${useCos ? `COS ${COS_BUCKET} (${COS_REGION})` : '本地文件(未配置 COS 密钥)'}`);
   loadStore().catch(() => {});
 });
+
+module.exports = { server, loadStore };
