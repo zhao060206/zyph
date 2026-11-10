@@ -123,10 +123,27 @@ test('missing index and unavailable storage keep photos accessible in pending cl
   await page.locator('#seasonSelect').selectOption('summer');
   await page.locator('[data-gallery-mode=tone]').click();
   await page.locator('[data-tone=pending]').click();
-  await expect(page.locator('#resultCount')).toHaveText('30 张作品');
+  await expect(page.locator('#resultCount')).toHaveText('待归类 · 30 张作品');
   await page.locator('.tone-photo').first().click();
   await expect(page.locator('#lightbox')).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('mixed-color photographs appear in both relevant tones without duplicates in all', async ({ page }) => {
+  await page.route('**/assets/tone-index.json', route => route.fulfill({ json: { version: 1, photos: {
+    ...photos, 'photos/sea-0.jpg': { version: 1, group: 'blue', groups: ['blue', 'pink'], source: 'vision', palette: ['#3366bb', '#dd99bb'] },
+  } } }));
+  await page.goto('/');
+  await page.locator('[data-gallery-mode=tone]').click();
+  await page.locator('[data-tone=pink]').click();
+  await expect(page.locator('.tone-card')).toHaveCount(1);
+  await expect(page.locator('.tone-caption h3')).toHaveText('海边 1');
+  await page.locator('[data-tone=blue]').click();
+  await expect(page.locator('.tone-card')).toHaveCount(15);
+  await page.locator('[data-tone=all]').click();
+  await page.locator('#toneMore').click();
+  await expect(page.locator('.tone-card')).toHaveCount(31);
+  await expect(page.locator('.tone-caption h3').filter({ hasText: /^海边 1$/ })).toHaveCount(1);
 });
 
 test('low hardware budgets skip canvas and disable expensive visual filters', async ({ page }) => {
@@ -138,6 +155,22 @@ test('low hardware budgets skip canvas and disable expensive visual filters', as
   expect(await page.locator('.topbar').evaluate(element => getComputedStyle(element).backdropFilter)).toBe('none');
   await page.locator('#seasonSelect').selectOption('spring');
   await expect(page.locator('html')).toHaveAttribute('data-season', 'spring');
+});
+
+test('scrolling color swatches keeps the viewport bounded and header controls clickable', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-gallery-mode=tone]').click();
+  const viewport = page.viewportSize().width;
+  await page.locator('#toneFilters').evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport);
+  expect(await page.evaluate(() => innerWidth)).toBe(viewport);
+  await page.locator('#themeBtn').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.locator('#seasonEffects').click();
+  await expect(page.locator('.season-canvas')).toHaveCount(0);
+  await page.locator('[data-tone=green]').click();
+  await page.locator('.tone-source').click();
+  await expect(page.locator('#gpTitle')).toHaveText('春日武汉');
 });
 
 test('sustained slow season frames reduce density then downgrade and release the engine', async ({ page }) => {

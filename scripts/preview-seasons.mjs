@@ -33,6 +33,7 @@ try {
     await page.waitForFunction(() => [...document.querySelectorAll('.tone-card')].filter(card => card.getBoundingClientRect().top < innerHeight).every(card => Number(getComputedStyle(card).opacity) > .99));
     await page.screenshot({ path: `qa-tones-${mobile ? 'mobile' : 'desktop'}.png` });
     await page.locator('#themeBtn').click();
+    await page.evaluate(() => Promise.allSettled(document.getAnimations().map(animation => animation.finished)));
     await page.screenshot({ path: `qa-tones-dark-${mobile ? 'mobile' : 'desktop'}.png` });
     if (errors.length) throw new Error(errors.join('\n'));
     await context.close();

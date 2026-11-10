@@ -19,7 +19,8 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
   let enabled = storageGet('pt_season_effects', 'on') !== 'off';
   let canvas = null, context = null, frame = 0, previous = 0, lastPaint = 0;
   let width = 0, height = 0, ratio = 1, particles = [], sprites = [];
-  let heroBottom = 0, quality = 1, samples = 0, slow = 0, expensive = 0, elapsed = 0;
+  let heroBottom = 0, heroFrame = null, topbarHeight = 0, frameRadius = 0;
+  let quality = 1, samples = 0, slow = 0, expensive = 0, elapsed = 0;
 
   function makeSprite(kind, index) {
     const sprite = document.createElement('canvas');
@@ -84,6 +85,11 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     canvas.width = Math.floor(width * ratio); canvas.height = Math.floor(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     heroBottom = !document.getElementById('archive').hidden ? Math.max(0, hero.getBoundingClientRect().bottom) : 0;
+    const media = document.querySelector('.hero-media');
+    const bounds = media.getBoundingClientRect();
+    heroFrame = { left: bounds.left, top: bounds.top + scrollY, width: bounds.width, height: bounds.height };
+    topbarHeight = document.querySelector('.topbar').offsetHeight;
+    frameRadius = parseFloat(getComputedStyle(media).borderRadius) || 0;
   }
 
   function start() {
@@ -137,11 +143,14 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       const kind = root.dataset.season;
       context.save();
       context.beginPath();
-      const topbarHeight = document.querySelector('.topbar').offsetHeight;
-      if (heroBottom > 0) context.rect(0, topbarHeight, width, Math.max(0, Math.min(heroBottom - 235, height) - topbarHeight));
+      if (heroBottom > 0 && heroFrame) {
+        if (context.roundRect) context.roundRect(heroFrame.left, heroFrame.top - scrollY, heroFrame.width, heroFrame.height, frameRadius);
+        else context.rect(heroFrame.left, heroFrame.top - scrollY, heroFrame.width, heroFrame.height);
+      }
       const edge = Math.min(34, width * .035), from = Math.max(74, heroBottom);
       context.rect(0, from, edge, height); context.rect(width - edge, from, edge, height);
       context.clip();
+      context.clearRect(0, 0, width, topbarHeight);
       if (kind === 'summer') {
         for (let beam = 0; beam < (quality === 1 ? 3 : 1); beam++) {
           context.save();

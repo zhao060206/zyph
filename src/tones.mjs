@@ -13,7 +13,14 @@ export const TONES = [
 export function validTone(tone) {
   return !!tone && tone.version === 1 && TONES.some(item => item.id === tone.group) &&
     Array.isArray(tone.palette) && tone.palette.length > 0 && tone.palette.length <= 3 &&
-    tone.palette.every(color => /^#[\da-f]{6}$/i.test(color));
+    tone.palette.every(color => /^#[\da-f]{6}$/i.test(color)) &&
+    (tone.groups === undefined || (Array.isArray(tone.groups) && tone.groups.length >= 1 && tone.groups.length <= 2 &&
+      tone.groups[0] === tone.group && new Set(tone.groups).size === tone.groups.length &&
+      tone.groups.every(group => TONES.some(item => item.id === group))));
+}
+
+export function toneGroups(tone) {
+  return tone ? tone.groups || [tone.group] : ['pending'];
 }
 
 export function classifyPixels(pixels) {
@@ -50,7 +57,9 @@ export function classifyPixels(pixels) {
 }
 
 export function resolveTone(photo, index = {}) {
-  if (validTone(photo.tone)) return photo.tone;
+  if (validTone(photo.tone) && photo.tone.manual) return photo.tone;
   const saved = Object.prototype.hasOwnProperty.call(index, photo.k || photo.u) ? index[photo.k || photo.u] : null;
+  if (validTone(saved) && saved.source === 'vision') return saved;
+  if (validTone(photo.tone)) return photo.tone;
   return validTone(saved) ? saved : null;
 }

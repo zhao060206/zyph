@@ -1,4 +1,4 @@
-import { TONES, resolveTone } from './tones.mjs';
+import { TONES, resolveTone, toneGroups } from './tones.mjs';
 import { SEASONS } from './seasons.js';
 
 export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, featuredPhoto, Motion, openGroup, openProof, closeGroup, openAdmin }) {
@@ -192,12 +192,13 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       const photos = groups.flatMap(group => group.gs.map((photo, index) => ({ group, photo, index, tone: resolveTone(photo, this.toneIndex) })))
         .filter(item => !query || `${item.photo.t} ${item.photo.d || ''} ${item.group.title} ${item.group.loc} ${item.group.d}`.toLowerCase().includes(query));
       const counts = {};
-      photos.forEach(item => { const group = item.tone?.group || 'pending'; counts[group] = (counts[group] || 0) + 1; });
+      photos.forEach(item => { for (const group of toneGroups(item.tone)) counts[group] = (counts[group] || 0) + 1; });
       const filters = [{ id: 'all', label: '全部', color: 'transparent' }, ...TONES, ...(counts.pending ? [{ id: 'pending', label: '待归类', color: '#b6b1a9' }] : [])];
       if (!filters.some(filter => filter.id === this.selectedTone)) this.selectedTone = 'all';
-      $('#toneFilters').innerHTML = filters.map(filter => `<button type="button" class="tone-filter" data-tone="${filter.id}" aria-pressed="${this.selectedTone === filter.id}"${filter.id !== 'all' && !counts[filter.id] ? ' disabled' : ''}><i style="--swatch:${filter.color}" aria-hidden="true"></i>${filter.label}<small>${filter.id === 'all' ? photos.length : counts[filter.id] || 0}</small></button>`).join('');
-      const matching = photos.filter(item => this.selectedTone === 'all' || (item.tone?.group || 'pending') === this.selectedTone);
-      $('#resultCount').textContent = `${matching.length} 张作品`;
+      $('#toneFilters').innerHTML = filters.map(filter => `<button type="button" class="tone-filter" data-tone="${filter.id}" title="${filter.label}" aria-pressed="${this.selectedTone === filter.id}"${filter.id !== 'all' && !counts[filter.id] ? ' disabled' : ''}><i style="--swatch:${filter.color}" aria-hidden="true"></i><span class="tone-filter-label${filter.id === 'all' ? '' : ' sr-only'}">${filter.label}</span><small>${filter.id === 'all' ? photos.length : counts[filter.id] || 0}</small></button>`).join('');
+      const matching = photos.filter(item => this.selectedTone === 'all' || toneGroups(item.tone).includes(this.selectedTone));
+      const selectedLabel = filters.find(filter => filter.id === this.selectedTone).label;
+      $('#resultCount').textContent = `${this.selectedTone === 'all' ? '' : selectedLabel + ' · '}${matching.length} 张作品`;
       $('#toneMore').hidden = matching.length <= this.limit;
       $('#toneMore').textContent = `更多 · ${Math.max(0, matching.length - this.limit)}`;
       $('#years').innerHTML = matching.length ? matching.slice(0, this.limit).map(item => `
@@ -216,6 +217,7 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       $('#toneMore').hidden = true;
       $('.archive-tools').hidden = toneMode;
       $('#galleryMode').querySelectorAll('[data-gallery-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.galleryMode === this.mode)));
+      $('#galleryMode').dataset.mode = this.mode;
       const query = $('#archiveSearch').value.trim().toLowerCase();
       const year = $('#yearFilter').value;
       const groups = Store.groups.filter(g => (!year || g.d.startsWith(year)) &&
@@ -227,10 +229,11 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       this.syncToolbar(groups);
       $('#years').innerHTML = groups.length ? groups.map((g, i) => {
         const isOpen = g.gs.length > 0 && this.openDays.has(g.d);
+        const coverURL = g.gs.length ? i === 0 && innerWidth >= 1060 && g.gs[0].tn?.v ? pView(g.gs[0]) : pURL(g.gs[0], 480) : '';
         return `
         <article class="album-card${isOpen ? ' is-sheet-open' : ''}" data-reveal>
           <button class="album-cover${g.gs.length ? '' : ' album-cover-empty'}" type="button" data-day="${g.d}" aria-label="查看 ${esc(g.title)}">
-            ${g.gs.length ? `<img src="${esc(pURL(g.gs[0], 480))}" alt="${esc(g.gs[0].t)}" loading="lazy" decoding="async" width="480" height="360">` : `<span class="album-empty"><span class="album-empty-ring" aria-hidden="true"></span><strong>${esc(g.title)}</strong><small>时光留白</small></span>`}
+            ${g.gs.length ? `<img src="${esc(coverURL)}" alt="${esc(g.gs[0].t)}" loading="lazy" decoding="async" width="480" height="360">` : `<span class="album-empty"><span class="album-empty-ring" aria-hidden="true"></span><strong>${esc(g.title)}</strong><small>时光留白</small></span>`}
             <span class="album-index">${String(i + 1).padStart(2, '0')}</span>
             <span class="album-frame-tag">${g.gs.length ? `${g.gs.length} 张` : '留白'}</span>
           </button>
