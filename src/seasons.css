@@ -9,6 +9,8 @@ html[data-theme=dark][data-season=winter]{--bg:#121b27;--panel:#1b2633;--surface
 :root{--card-radius:24px;--image-radius:12px;--control-radius:12px;--ease:cubic-bezier(.22,1,.36,1);--shadow-sm:0 1px 2px #00000008;--shadow-card:none;--shadow-hover:none}
 body{background:var(--bg)}
 .season-canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10;contain:strict}
+.exhibition-hero{isolation:auto}
+.hero-bottom{z-index:20}
 .season-controls{display:none}
 .nav-end .season-controls{display:flex;align-items:center;gap:4px}
 .season-picker select{appearance:none;border:0;border-radius:var(--control-radius);background:transparent;color:inherit;font:13px var(--sans);min-height:44px;min-width:60px;padding:8px 24px 8px 12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238e9893' stroke-width='1.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}

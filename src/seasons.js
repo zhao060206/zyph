@@ -1,3 +1,5 @@
+import { createSeasonScene, resizeSeasonScene, stepSeasonScene, depositOpacity } from './season-scene.mjs';
+
 export const SEASONS = {
   spring: { label: '春', accent: '#e7a7b6', groups: ['pink', 'green'] },
   summer: { label: '夏', accent: '#80bca4', groups: ['green', 'cyan'] },
@@ -18,34 +20,42 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
   if (choice !== 'auto' && !SEASONS[choice]) choice = 'auto';
   let enabled = storageGet('pt_season_effects', 'on') !== 'off';
   let canvas = null, context = null, frame = 0, previous = 0, lastPaint = 0;
-  let width = 0, height = 0, ratio = 1, particles = [], sprites = [];
+  let width = 0, height = 0, ratio = 1, scene = null, sprites = [];
   let heroBottom = 0, heroFrame = null, topbarHeight = 0, frameRadius = 0;
   let quality = 1, samples = 0, slow = 0, expensive = 0, elapsed = 0;
 
   function makeSprite(kind, index) {
     const sprite = document.createElement('canvas');
-    sprite.width = sprite.height = 64;
+    sprite.width = sprite.height = 96;
     const drawing = sprite.getContext('2d');
+    drawing.scale(1.5, 1.5);
     drawing.translate(32, 32);
     if (kind === 'spring') {
-      drawing.fillStyle = index % 2 ? '#f2c4cf' : '#e9a4b6';
+      const color = drawing.createLinearGradient(-18, -20, 18, 24);
+      color.addColorStop(0, ['#ffd7e7', '#ffb9d5', '#f9c6df'][index]);
+      color.addColorStop(1, ['#e779a4', '#e987b7', '#d96e9e'][index]);
+      drawing.fillStyle = color;
       drawing.beginPath();
       drawing.moveTo(0, 23);
       drawing.bezierCurveTo(-27, 4, -18, -25, 0, -13);
       drawing.bezierCurveTo(18, -25, 27, 4, 0, 23);
       drawing.fill();
-      drawing.strokeStyle = '#bd7a8d'; drawing.globalAlpha = .4;
+      drawing.strokeStyle = '#b95e86'; drawing.globalAlpha = .6;
       drawing.beginPath(); drawing.moveTo(0, 20); drawing.quadraticCurveTo(6, 0, 0, -10); drawing.stroke();
     } else if (kind === 'autumn') {
-      drawing.fillStyle = ['#b86243', '#d5a14c', '#a44d42'][index % 3];
+      const color = drawing.createLinearGradient(-16, -25, 15, 24);
+      color.addColorStop(0, ['#f5b74b', '#e7803d', '#dd6850'][index]);
+      color.addColorStop(1, ['#d86d30', '#be4936', '#aa3c33'][index]);
+      drawing.fillStyle = color;
       drawing.beginPath();
       const points = [[0,-28],[7,-12],[17,-19],[14,-6],[27,-7],[18,4],[24,11],[7,13],[1,27],[-2,14],[-21,12],[-16,3],[-28,-6],[-12,-5],[-17,-19],[-6,-12]];
       points.forEach(([left, top], point) => point ? drawing.lineTo(left, top) : drawing.moveTo(left, top));
       drawing.closePath(); drawing.fill();
-      drawing.strokeStyle = '#693e31'; drawing.globalAlpha = .4;
-      drawing.beginPath(); drawing.moveTo(0, -22); drawing.lineTo(0, 24); drawing.stroke();
+      drawing.strokeStyle = '#87452e'; drawing.globalAlpha = .6;
+      drawing.beginPath(); drawing.moveTo(0, -22); drawing.lineTo(0, 24);
+      drawing.moveTo(0, 6); drawing.lineTo(-15, -8); drawing.moveTo(0, 6); drawing.lineTo(15, -8); drawing.stroke();
     } else {
-      drawing.strokeStyle = '#e5f2ff'; drawing.lineWidth = 2;
+      drawing.strokeStyle = index % 2 ? '#94c4e4' : '#eef8ff'; drawing.lineWidth = 2.8;
       for (let arm = 0; arm < 6; arm++) {
         drawing.rotate(Math.PI / 3);
         drawing.beginPath(); drawing.moveTo(0, 0); drawing.lineTo(0, -22);
@@ -61,7 +71,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     sprite.width = 128; sprite.height = 512;
     const drawing = sprite.getContext('2d');
     const across = drawing.createLinearGradient(0, 0, 128, 0);
-    across.addColorStop(0, 'rgba(255,245,203,0)'); across.addColorStop(.5, 'rgba(255,245,203,.14)'); across.addColorStop(1, 'rgba(255,245,203,0)');
+    across.addColorStop(0, 'rgba(255,245,203,0)'); across.addColorStop(.5, 'rgba(255,245,203,.25)'); across.addColorStop(1, 'rgba(255,245,203,0)');
     drawing.fillStyle = across; drawing.fillRect(0, 0, 128, 512);
     drawing.globalCompositeOperation = 'destination-in';
     const length = drawing.createLinearGradient(0, 0, 0, 512);
@@ -75,7 +85,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     frame = previous = lastPaint = 0;
     if (canvas) { canvas.width = canvas.height = 0; canvas.remove(); }
     sprites.forEach(sprite => { sprite.width = sprite.height = 0; });
-    canvas = context = null; sprites = []; particles = [];
+    canvas = context = scene = null; sprites = [];
   }
 
   function measure() {
@@ -84,6 +94,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     ratio = Math.min(devicePixelRatio || 1, 1.5, ceiling);
     canvas.width = Math.floor(width * ratio); canvas.height = Math.floor(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    if (scene && (scene.width !== width || scene.height !== height)) scene = resizeSeasonScene(scene, width, height);
     heroBottom = !document.getElementById('archive').hidden ? Math.max(0, hero.getBoundingClientRect().bottom) : 0;
     const media = document.querySelector('.hero-media');
     const bounds = media.getBoundingClientRect();
@@ -101,12 +112,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     measure();
     const kind = root.dataset.season;
     sprites = kind === 'summer' ? [makeLight()] : [0, 1, 2].map(index => makeSprite(kind, index));
-    const count = width < 760 ? 16 : 32;
-    particles = Array.from({ length: count }, (_, index) => ({
-      x: Math.random() * width, y: Math.random() * height, phase: Math.random() * Math.PI * 2,
-      size: kind === 'winter' ? 2 + Math.random() * 5 : 8 + Math.random() * 12,
-      speed: 12 + Math.random() * 25, spin: Math.random() * 2 - 1, sprite: index % 3,
-    }));
+    scene = createSeasonScene(kind, width, height);
     root.dataset.seasonEffects = 'running';
     frame = requestAnimationFrame(draw);
   }
@@ -120,6 +126,19 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       release();
       root.dataset.seasonEffects = !enabled ? 'off' : document.hidden || root.dataset.dialogOpen === 'true' ? 'paused' : 'static';
     } else if (!canvas) start();
+  }
+
+  function paintParticle(particle, x, y, rotation, alpha, flatten = 1) {
+    context.save(); context.translate(x, y); context.rotate(rotation); context.scale(1, flatten);
+    context.globalAlpha = alpha;
+    if (scene.kind === 'summer' || scene.kind === 'winter' && particle.sprite) {
+      context.fillStyle = scene.kind === 'summer' ? '#fff1b4' : '#eaf7ff';
+      context.beginPath(); context.arc(0, 0, particle.size * .32, 0, Math.PI * 2); context.fill();
+      if (scene.kind === 'winter') { context.strokeStyle = '#8eb9d5'; context.lineWidth = .8; context.stroke(); }
+    } else {
+      context.drawImage(sprites[particle.sprite], -particle.size / 2, -particle.size / 2, particle.size, particle.size);
+    }
+    context.restore();
   }
 
   function draw(time) {
@@ -141,16 +160,16 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       lastPaint = time; elapsed += delta;
       context.clearRect(0, 0, width, height);
       const kind = root.dataset.season;
+      stepSeasonScene(scene, delta, elapsed, quality, heroBottom <= topbarHeight);
       context.save();
       context.beginPath();
       if (heroBottom > 0 && heroFrame) {
         if (context.roundRect) context.roundRect(heroFrame.left, heroFrame.top - scrollY, heroFrame.width, heroFrame.height, frameRadius);
         else context.rect(heroFrame.left, heroFrame.top - scrollY, heroFrame.width, heroFrame.height);
       }
-      const edge = Math.min(34, width * .035), from = Math.max(74, heroBottom);
+      const edge = Math.min(84, width * .12), from = Math.max(topbarHeight, heroBottom);
       context.rect(0, from, edge, height); context.rect(width - edge, from, edge, height);
       context.clip();
-      context.clearRect(0, 0, width, topbarHeight);
       if (kind === 'summer') {
         for (let beam = 0; beam < (quality === 1 ? 3 : 1); beam++) {
           context.save();
@@ -158,25 +177,17 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
           context.drawImage(sprites[0], -width * .12, 0, width * .24, height * 1.4);
           context.restore();
         }
-      } else {
-        const density = heroBottom > topbarHeight ? 1 : .4;
-        for (let index = 0; index < Math.floor(particles.length * quality * density); index++) {
-          const particle = particles[index];
-          particle.y += particle.speed * delta; particle.x += Math.sin(elapsed * .5 + particle.phase) * delta * 11;
-          if (particle.y > height + 25) { particle.y = -25; particle.x = Math.random() * width; }
-          context.save(); context.translate(particle.x, particle.y);
-          context.rotate(elapsed * particle.spin * .4 + particle.phase);
-          context.globalAlpha = kind === 'winter' ? .65 : .48;
-          if (kind === 'winter' && index % 4) {
-            context.fillStyle = '#f0f7ff'; context.beginPath(); context.arc(0, 0, particle.size * .4, 0, Math.PI * 2); context.fill();
-          } else {
-            context.scale(Math.max(.25, Math.abs(Math.sin(elapsed * .7 + particle.phase))), 1);
-            context.drawImage(sprites[particle.sprite], -particle.size / 2, -particle.size / 2, particle.size, particle.size);
-          }
-          context.restore();
-        }
+      }
+      for (let index = 0; index < Math.floor(scene.particles.length * quality); index++) {
+        const particle = scene.particles[index];
+        const flutter = kind === 'spring' || kind === 'autumn' ? .5 + Math.abs(Math.sin(elapsed * .8 + particle.phase)) * .5 : 1;
+        paintParticle(particle, particle.x, particle.y, elapsed * particle.spin * .45 + particle.phase, particle.alpha, flutter);
       }
       context.restore();
+      for (const deposit of scene.deposits) {
+        const settling = Math.sin(deposit.age * 9) * Math.exp(-deposit.age * 5) * 3;
+        paintParticle(deposit, deposit.x * width, height - deposit.floor + settling, deposit.rotation, depositOpacity(deposit), kind === 'winter' ? .75 : .55);
+      }
       if (performance.now() - begin > 6) expensive++;
     }
     frame = requestAnimationFrame(draw);

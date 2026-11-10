@@ -186,6 +186,25 @@ test('sustained slow season frames reduce density then downgrade and release the
   await expect(page.locator('.season-canvas')).toHaveCount(0);
 });
 
+test('large autumn leaves accumulate at the screen floor, follow a resize and release on opt-out', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => { Math.random = () => .5; });
+  await page.goto('/');
+  await page.locator('#seasonSelect').selectOption('autumn');
+  await page.clock.runFor(6000);
+  const hasFloorPile = () => page.locator('.season-canvas').evaluate(canvas => {
+    const drawing = canvas.getContext('2d');
+    const pixels = drawing.getImageData(Math.floor(canvas.width * .2), Math.max(0, canvas.height - 50), Math.floor(canvas.width * .6), 50).data;
+    return pixels.some((value, index) => index % 4 === 3 && value > 20);
+  });
+  expect(await hasFloorPile()).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.runFor(500);
+  expect(await hasFloorPile()).toBe(true);
+  await page.locator('#seasonEffects').click();
+  await expect(page.locator('.season-canvas')).toHaveCount(0);
+});
+
 test('fifty season and view switches keep one engine, bounded DOM and no retained canvas buffers', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.album-card')).toHaveCount(2);
