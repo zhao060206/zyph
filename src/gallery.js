@@ -1,6 +1,14 @@
+import { TONES, resolveTone } from './tones.mjs';
+import { SEASONS } from './seasons.js';
+
 export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, featuredPhoto, Motion, openGroup, openProof, closeGroup, openAdmin }) {
   return {
     openDays: new Set(),
+    toneIndex: {},
+    seasonCovers: {},
+    mode: 'archive',
+    selectedTone: 'all',
+    limit: 24,
     init() {
       const filter = $('#yearFilter');
       const selected = filter.value;
@@ -22,8 +30,38 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
         if (!validDays.has(day)) this.openDays.delete(day);
       }
       this.render();
+      if (this.bound) this.seasonHero();
       if (this.bound) return;
       this.bound = true;
+      fetch('/assets/tone-index.json').then(response => {
+        if (!response.ok) throw new Error('色调索引暂时不可用');
+        return response.json();
+      }).then(data => {
+        if (data.version !== 1 || !data.photos || typeof data.photos !== 'object') throw new Error('色调索引格式无效');
+        this.toneIndex = data.photos;
+        this.seasonCovers = data.covers || {};
+        if (this.mode === 'tone') this.render();
+        if (!this.heroManual) this.seasonHero();
+      }).catch(() => { if (this.mode === 'tone') this.render(); });
+      document.addEventListener('season:change', () => this.seasonHero());
+      $('#galleryMode').addEventListener('click', event => {
+        const button = event.target.closest('[data-gallery-mode]');
+        if (!button || this.mode === button.dataset.galleryMode) return;
+        this.mode = button.dataset.galleryMode;
+        this.render();
+      });
+      $('#toneFilters').addEventListener('click', event => {
+        const button = event.target.closest('[data-tone]');
+        if (!button) return;
+        this.selectedTone = button.dataset.tone;
+        this.render();
+        $('#toneFilters').querySelector(`[data-tone="${this.selectedTone}"]`).focus({ preventScroll: true });
+      });
+      $('#toneMore').addEventListener('click', () => {
+        const firstNew = this.limit;
+        this.limit += 24; this.render(false);
+        $('#years').querySelectorAll('.tone-photo')[firstNew]?.focus({ preventScroll: true });
+      });
       let searchTimer;
       $('#archiveSearch').addEventListener('input', () => {
         clearTimeout(searchTimer);
@@ -38,16 +76,17 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
         }
         const proof = event.target.closest('.proof[data-proof-idx]');
         if (proof && openProof) {
+          proof.focus({ preventScroll: true });
           openProof(proof.dataset.day, Number(proof.dataset.proofIdx));
           return;
         }
         const target = event.target.closest('[data-day]');
-        if (target) openGroup(target.dataset.day);
+        if (target) { target.focus({ preventScroll: true }); openGroup(target.dataset.day); }
       });
       feature.addEventListener('click', () => openGroup(feature.dataset.day));
       $('#heroExplore').addEventListener('click', () => feature.click());
-      $('#heroPrev').addEventListener('click', () => this.paintHero((this.heroIndex - 1 + this.slides.length) % this.slides.length));
-      $('#heroNext').addEventListener('click', () => this.paintHero((this.heroIndex + 1) % this.slides.length));
+      $('#heroPrev').addEventListener('click', () => { this.heroManual = true; this.paintHero((this.heroIndex - 1 + this.slides.length) % this.slides.length); });
+      $('#heroNext').addEventListener('click', () => { this.heroManual = true; this.paintHero((this.heroIndex + 1) % this.slides.length); });
       $('#expandAll').addEventListener('click', () => {
         Store.groups.forEach(g => { if (g.gs.length) this.openDays.add(g.d); });
         this.render();
@@ -70,10 +109,26 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
         });
       }
     },
-    paintHero(index) {
+    seasonHero() {
+      const season = document.documentElement.dataset.season;
+      const config = SEASONS[season];
+      if (!config || !this.slides.length) return;
+      const curated = this.seasonCovers[season];
+      let chosen = null, albumIndex = -1;
+      if (curated) albumIndex = this.slides.findIndex(group => { chosen = group.gs.find(photo => photo.k === curated); return !!chosen; });
+      if (albumIndex < 0) {
+        albumIndex = this.slides.findIndex(group => {
+          chosen = group.gs.find(photo => config.groups.includes(resolveTone(photo, this.toneIndex)?.group));
+          return !!chosen;
+        });
+      }
+      this.heroManual = false;
+      if (albumIndex >= 0) this.paintHero(albumIndex, chosen);
+    },
+    paintHero(index, chosenPhoto) {
       this.heroIndex = index;
       const group = this.slides[index];
-      const photo = index === 0 ? group.gs.find(p => p.k === featuredPhoto) || group.gs[0] : group.gs[0];
+      const photo = chosenPhoto || (index === 0 ? group.gs.find(p => p.k === featuredPhoto) || group.gs[0] : group.gs[0]);
       const feature = $('#heroFeature'), img = $('#heroImage');
       feature.dataset.day = group.d;
       feature.dataset.photo = photo.k || photo.u;
@@ -133,12 +188,40 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       }
       this.syncToolbar(this.currentGroups || Store.groups);
     },
-    render() {
+    renderTones(groups, query) {
+      const photos = groups.flatMap(group => group.gs.map((photo, index) => ({ group, photo, index, tone: resolveTone(photo, this.toneIndex) })))
+        .filter(item => !query || `${item.photo.t} ${item.photo.d || ''} ${item.group.title} ${item.group.loc} ${item.group.d}`.toLowerCase().includes(query));
+      const counts = {};
+      photos.forEach(item => { const group = item.tone?.group || 'pending'; counts[group] = (counts[group] || 0) + 1; });
+      const filters = [{ id: 'all', label: '全部', color: 'transparent' }, ...TONES, ...(counts.pending ? [{ id: 'pending', label: '待归类', color: '#b6b1a9' }] : [])];
+      if (!filters.some(filter => filter.id === this.selectedTone)) this.selectedTone = 'all';
+      $('#toneFilters').innerHTML = filters.map(filter => `<button type="button" class="tone-filter" data-tone="${filter.id}" aria-pressed="${this.selectedTone === filter.id}"${filter.id !== 'all' && !counts[filter.id] ? ' disabled' : ''}><i style="--swatch:${filter.color}" aria-hidden="true"></i>${filter.label}<small>${filter.id === 'all' ? photos.length : counts[filter.id] || 0}</small></button>`).join('');
+      const matching = photos.filter(item => this.selectedTone === 'all' || (item.tone?.group || 'pending') === this.selectedTone);
+      $('#resultCount').textContent = `${matching.length} 张作品`;
+      $('#toneMore').hidden = matching.length <= this.limit;
+      $('#toneMore').textContent = `更多 · ${Math.max(0, matching.length - this.limit)}`;
+      $('#years').innerHTML = matching.length ? matching.slice(0, this.limit).map(item => `
+        <article class="tone-card" data-reveal>
+          <button class="tone-photo proof" type="button" data-day="${item.group.d}" data-proof-idx="${item.index}" aria-label="查看 ${esc(item.photo.t)}"><img src="${esc(pURL(item.photo, 480))}" alt="${esc(item.photo.t)}" loading="lazy" decoding="async" width="480" height="360"></button>
+          <div class="tone-caption"><h3>${esc(item.photo.t)}</h3><span class="tone-palette" aria-label="作品代表色">${(item.tone?.palette || []).map(color => `<i style="--swatch:${color}" aria-hidden="true"></i>`).join('')}</span></div>
+          <button class="tone-source" type="button" data-day="${item.group.d}" aria-label="返回相册 ${esc(item.group.title)}"><span>${esc(item.group.d)} · ${esc(item.group.loc)}</span><span aria-hidden="true">↗</span></button>
+        </article>`).join('') : '<p class="empty">这个色系暂时没有匹配的作品。</p>';
+      Motion.observe($('#years'));
+    },
+    render(reset = true) {
+      if (reset) this.limit = 24;
+      const toneMode = this.mode === 'tone';
+      $('#years').classList.toggle('tone-grid', toneMode);
+      $('#toneFilters').hidden = !toneMode;
+      $('#toneMore').hidden = true;
+      $('.archive-tools').hidden = toneMode;
+      $('#galleryMode').querySelectorAll('[data-gallery-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.galleryMode === this.mode)));
       const query = $('#archiveSearch').value.trim().toLowerCase();
       const year = $('#yearFilter').value;
       const groups = Store.groups.filter(g => (!year || g.d.startsWith(year)) &&
-        (!query || `${g.title} ${g.loc} ${g.d} ${g.c || ''}`.toLowerCase().includes(query)))
+        (toneMode || !query || `${g.title} ${g.loc} ${g.d} ${g.c || ''}`.toLowerCase().includes(query)))
         .sort((a, b) => b.d.localeCompare(a.d));
+      if (toneMode) { this.renderTones(groups, query); return; }
       this.currentGroups = groups;
       $('#resultCount').textContent = `${groups.length} 组 · ${groups.reduce((sum, g) => sum + g.gs.length, 0)} 张作品`;
       this.syncToolbar(groups);

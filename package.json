@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/server.test.cjs",
+    "test": "node --test tests/server.test.cjs tests/tones.test.mjs",
+    "analyze:tones": "node scripts/analyze-tones.mjs",
     "test:browser": "playwright test",
     "check": "node --check server.js && npm run build && npm test"
   },

@@ -18,6 +18,7 @@ export function setupDialogs(closeHandlers) {
       }
     }
     document.body.style.overflow = top ? 'hidden' : '';
+    document.documentElement.dataset.dialogOpen = String(!!top);
     if (top && !top.contains(document.activeElement)) {
       const first = focusables(top)[0];
       if (first) first.focus({ preventScroll: true });

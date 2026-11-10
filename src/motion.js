@@ -8,7 +8,7 @@ export function createMotionController() {
   let tier = 'lite', started = false, testing = false, locked = false;
   let revealObserver = null, heroObserver = null, taskObserver = null;
   let raf = 0, previousFrame = 0, slowFrames = 0, sampledFrames = 0, monitorUntil = 0;
-  let pointerX = 0, pointerY = 0, heroVisible = true, heroHeight = 0;
+  let heroVisible = true, heroHeight = 0;
   const revealTargets = new Set();
 
   function restriction() {
@@ -39,6 +39,7 @@ export function createMotionController() {
   }
   function setTier(value, reason, save = true) {
     tier = value; root.dataset.motion = value; root.dataset.motionReason = reason;
+    document.dispatchEvent(new CustomEvent('motion:change', { detail: { tier: value } }));
     if (save) cache(value);
     if (value === 'full') observe();
     else {
@@ -47,7 +48,6 @@ export function createMotionController() {
       if (revealObserver) revealObserver.disconnect(); revealObserver = null;
       revealTargets.clear();
       if (taskObserver) taskObserver.disconnect(); taskObserver = null;
-      root.style.setProperty('--hero-x', '0px'); root.style.setProperty('--hero-y', '0px');
       document.querySelectorAll('.hero-image').forEach(image => {
         if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
       });
@@ -98,7 +98,7 @@ export function createMotionController() {
   function renderFrame(time) {
     raf = 0;
     const header = document.querySelector('.topbar');
-    if (header) header.classList.toggle('is-scrolled', window.scrollY > Math.max(80, heroHeight - 80));
+    if (header) header.classList.toggle('is-scrolled', window.scrollY >= Math.max(80, heroHeight - header.offsetHeight));
     if (tier !== 'full' || !heroVisible || document.hidden || document.getElementById('archive').hidden) { previousFrame = 0; return; }
     // Sample consecutive frames during interaction, never the gaps between input events.
     const interval = time - previousFrame;
@@ -110,8 +110,6 @@ export function createMotionController() {
       }
     }
     previousFrame = time;
-    root.style.setProperty('--hero-x', `${pointerX.toFixed(2)}px`);
-    root.style.setProperty('--hero-y', `${Math.min(50, window.scrollY * .10) + pointerY}px`);
     if (time < monitorUntil) raf = requestAnimationFrame(renderFrame);
     else previousFrame = 0;
   }
@@ -123,11 +121,12 @@ export function createMotionController() {
   return {
     observe,
     get tier() { return tier; },
+    downgrade(reason = 'season-pressure') { setTier('lite', reason); },
     enterImage(image) {
       if (tier !== 'full' || reduced.matches || !image.animate || document.hidden) return;
       if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
-      image.animate([{ opacity: .55, transform: 'scale(1.08)' }, { opacity: 1, transform: getComputedStyle(image).transform }], {
-        duration: 1200, easing: 'cubic-bezier(.16,1,.3,1)',
+      image.animate([{ opacity: .7 }, { opacity: 1 }], {
+        duration: 350, easing: 'cubic-bezier(.22,1,.36,1)',
       });
     },
     transition(update) {
@@ -156,11 +155,8 @@ export function createMotionController() {
       if (hero) {
         hero.addEventListener('pointermove', event => {
           if (tier !== 'full' || !pointer.matches || event.pointerType === 'touch') return;
-          pointerX = (event.clientX / innerWidth - .5) * -12;
-          pointerY = (event.clientY / Math.max(heroHeight, 1) - .5) * -8;
           scheduleFrame(true);
         }, { passive: true });
-        hero.addEventListener('pointerleave', () => { pointerX = pointerY = 0; scheduleFrame(); });
       }
       const preferenceChanged = () => {
         const limit = restriction();

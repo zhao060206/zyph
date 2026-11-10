@@ -222,6 +222,7 @@ test('motion grading respects reduced motion and low memory, while rich mode kee
 test('interaction grading ignores sparse input gaps and downgrades sustained slow frames', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => {
+    localStorage.setItem('pt_season_effects', 'off');
     sessionStorage.setItem('pt_motion_grade_v1', JSON.stringify({ tier: 'full', timestamp: Date.now() }));
     Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 8 });
     Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 8 });

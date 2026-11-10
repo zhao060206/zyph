@@ -601,6 +601,7 @@ const publicFiles = new Map([
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
+  ['/assets/tone-index.json', ['public/tone-index.json', 'application/json; charset=utf-8']],
 ]);
 
 async function serveAsset(req, res, filename, type) {

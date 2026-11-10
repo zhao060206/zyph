@@ -48,8 +48,41 @@ test('admin photo upload preserves existing albums and writes original, two JPEG
   const uploaded = result.catalog.groups.find(group => group.d === '2026-11-08').gs[0];
   expect(uploaded.tn.s).toMatch(/_t480\.jpg$/);
   expect(uploaded.tn.v).toMatch(/_t1600\.jpg$/);
+  expect(uploaded.tone).toMatchObject({ version: 1, group: 'neutral' });
   expect(result.calls.filter(call => call.type === 'image/jpeg')).toHaveLength(2);
   expect(result.calls[result.calls.length - 1].key).toBe('data.json');
+});
+
+test('admin tone corrections persist, failed writes roll back, and automatic reanalysis removes overrides', async ({ page }) => {
+  await page.goto('/#admin');
+  await page.locator('[data-tab=manage]').click();
+  await page.locator('.mg-tone').selectOption('green');
+  await expect(page.locator('#adminStatus')).toContainText('作品色调已保存');
+  expect(await page.evaluate(() => window.__testUploads.catalog.groups[0].gs[0].tone)).toMatchObject({ group: 'green', manual: true });
+  await page.evaluate(() => { window.__testUploads.failIndex = true; });
+  await page.locator('.mg-tone').selectOption('red');
+  await expect(page.locator('#adminStatus')).toContainText('色调保存失败');
+  await expect(page.locator('.mg-tone')).toHaveValue('green');
+  await page.evaluate(() => { window.__testUploads.failIndex = false; });
+  await page.locator('.mg-tone').selectOption('auto');
+  await expect(page.locator('#adminStatus')).toContainText('作品色调已保存');
+  const tone = await page.evaluate(() => window.__testUploads.catalog.groups[0].gs[0].tone);
+  expect(tone.group).toBe('neutral');
+  expect(tone.manual).toBeUndefined();
+});
+
+test('page backup includes the tone index and refuses to write when a required asset is unavailable', async ({ page }) => {
+  await page.goto('/#admin');
+  await page.locator('[data-tab=setup]').click();
+  await page.locator('#adminPublish').click();
+  await expect(page.locator('#pubOut')).toContainText('色调索引');
+  const calls = await page.evaluate(() => window.__testUploads.calls);
+  expect(calls.map(call => call.key)).toEqual(['assets/app.js', 'assets/site.css', 'assets/tone-index.json', 'index.html']);
+  await page.evaluate(() => { window.__testUploads.calls = []; });
+  await page.route('**/assets/tone-index.json', route => route.fulfill({ status: 503 }));
+  await page.locator('#adminPublish').click();
+  await expect(page.locator('#adminStatus')).toContainText('未写入不完整备份');
+  expect(await page.evaluate(() => window.__testUploads.calls)).toEqual([]);
 });
 
 test('failed catalog saves keep originals intact during delete and replace', async ({ page }) => {
