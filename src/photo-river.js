@@ -21,7 +21,7 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
   const toggle = document.getElementById('riverMotion');
   const ratios = [.76, 1.22, .92, 1.42, .86, 1.08];
   let entries = [], columns = [], active = new Set(), cursor = 0, generation = 0;
-  let frame = 0, painted = 0, inView = true, hovering = false, focused = false, pendingLayout = false;
+  let frame = 0, painted = 0, paintTick = -1, inView = true, hovering = false, focused = false, pendingLayout = false;
   let layoutKey = '';
   let enabled = storageGet('pt_river_motion', 'on') !== 'off';
 
@@ -62,7 +62,7 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     const maximum = Math.min(entries.length, count * budget.slots);
     for (let columnIndex = 0; columnIndex < count; columnIndex++) {
       const element = document.createElement('div'); element.className = 'river-column';
-      const column = { element, slots: [], offset: -columnWidth * (columnIndex % 2 ? .72 : .2), speed: (innerWidth < 760 ? 13 : 20) + columnIndex * 2.5, gap };
+      const column = { element, slots: [], offset: -columnWidth * (columnIndex % 2 ? .72 : .2), speed: (innerWidth < 760 ? 23 : 34) + columnIndex * 3, gap };
       host.appendChild(element); columns.push(column);
       for (let row = columnIndex; row < maximum; row += count) {
         const entry = next();
@@ -94,6 +94,7 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     if (!running()) {
       if (frame) cancelAnimationFrame(frame);
       frame = painted = 0;
+      paintTick = -1;
       host.dataset.running = 'false';
     } else if (!frame) {
       host.dataset.running = 'true'; frame = requestAnimationFrame(draw);
@@ -106,22 +107,24 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
   function draw(time) {
     frame = 0;
     if (!running()) { sync(); return; }
-    if (!painted || time - painted >= 1000 / 30) {
-      const delta = Math.min((time - (painted || time)) / 1000, .08);
-      painted = time;
-      for (const column of columns) {
-        column.offset -= column.speed * delta;
-        const first = column.slots[0];
-        if (first && column.offset + first.height + column.gap <= 0) {
-          const entry = next();
-          if (entry) {
-            column.offset += first.height + column.gap;
-            column.slots.shift(); assign(first, entry); column.slots.push(first);
-            column.element.appendChild(first.button);
-          } else column.offset = -column.element.scrollHeight * .15;
-        }
-        column.element.style.transform = `translate3d(0,${column.offset.toFixed(2)}px,0)`;
+    // Stable 60Hz time slots avoid the old 30fps judder without painting at 144/240Hz.
+    const tick = Math.floor(time * 60 / 1000 + .001);
+    if (tick === paintTick) { frame = requestAnimationFrame(draw); return; }
+    paintTick = tick;
+    const delta = Math.min((time - (painted || time)) / 1000, .08);
+    painted = time;
+    for (const column of columns) {
+      column.offset -= column.speed * delta;
+      const first = column.slots[0];
+      if (first && column.offset + first.height + column.gap <= 0) {
+        const entry = next();
+        if (entry) {
+          column.offset += first.height + column.gap;
+          column.slots.shift(); assign(first, entry); column.slots.push(first);
+          column.element.appendChild(first.button);
+        } else column.offset = -column.element.scrollHeight * .15;
       }
+      column.element.style.transform = `translate3d(0,${column.offset.toFixed(2)}px,0)`;
     }
     frame = requestAnimationFrame(draw);
   }

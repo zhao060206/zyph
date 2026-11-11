@@ -232,9 +232,9 @@ test('river recycles a bounded preview pool through the collection and pauses fo
     const callbacks = new Map();
     window.requestAnimationFrame = callback => { callbacks.set(++handle, callback); return handle; };
     window.cancelAnimationFrame = id => callbacks.delete(id);
-    window.__riverAdvance = async duration => {
-      for (let elapsed = 0; elapsed < duration; elapsed += 80) {
-        time += 80;
+    window.__riverAdvance = async (duration, step = 80) => {
+      for (let elapsed = 0; elapsed < duration; elapsed += step) {
+        time += step;
         const pending = [...callbacks.values()]; callbacks.clear();
         pending.forEach(callback => callback(time));
         await Promise.resolve();
@@ -250,6 +250,27 @@ test('river recycles a bounded preview pool through the collection and pauses fo
     const record = () => document.querySelectorAll('.river-tile').forEach(tile => window.__riverSeen.add(tile.dataset.key));
     record(); new MutationObserver(record).observe(document.getElementById('photoRiver'), { subtree: true, attributes: true, attributeFilter: ['data-key'] });
   });
+  const cadence = await page.evaluate(async () => {
+    const column = document.querySelector('.river-column');
+    let start = new DOMMatrixReadOnly(getComputedStyle(column).transform).m42;
+    let updates = 0;
+    const observer = new MutationObserver(() => updates++);
+    observer.observe(column, { attributes: true, attributeFilter: ['style'] });
+    await window.__riverAdvance(1000, 1000 / 60);
+    const normal = { updates, distance: start - new DOMMatrixReadOnly(getComputedStyle(column).transform).m42 };
+    start = new DOMMatrixReadOnly(getComputedStyle(column).transform).m42;
+    updates = 0;
+    await window.__riverAdvance(1000, 1000 / 240);
+    observer.disconnect();
+    return { ...normal, highRefreshUpdates: updates, highRefreshDistance: start - new DOMMatrixReadOnly(getComputedStyle(column).transform).m42 };
+  });
+  expect(cadence.updates).toBeGreaterThanOrEqual(58);
+  expect(cadence.distance).toBeGreaterThan(page.viewportSize().width < 760 ? 21 : 32);
+  expect(cadence.distance).toBeLessThan(page.viewportSize().width < 760 ? 25 : 36);
+  expect(cadence.highRefreshUpdates).toBeGreaterThanOrEqual(58);
+  expect(cadence.highRefreshUpdates).toBeLessThanOrEqual(62);
+  expect(cadence.highRefreshDistance).toBeGreaterThan(page.viewportSize().width < 760 ? 21 : 32);
+  expect(cadence.highRefreshDistance).toBeLessThan(page.viewportSize().width < 760 ? 25 : 36);
   await page.evaluate(() => window.__riverAdvance(90000));
   expect(await page.evaluate(() => window.__riverSeen.size)).toBe(31);
   expect(await page.locator('.river-tile').evaluateAll(tiles => new Set(tiles.map(tile => tile.dataset.key)).size)).toBe(await page.locator('.river-tile').count());

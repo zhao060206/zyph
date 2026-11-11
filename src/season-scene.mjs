@@ -53,8 +53,13 @@ export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = fals
     particle.x += (Math.sin(time * .65 + particle.phase) * 17 + (scene.kind === 'autumn' ? 8 : 3)) * delta;
     if (particle.x < -particle.size) particle.x = scene.width + particle.size;
     if (particle.x > scene.width + particle.size) particle.x = -particle.size;
+    // Only particles close enough to touch the highest possible pile need collision work.
+    if (particle.y < scene.height - 32 - particle.size * .2) continue;
     const x = Math.max(particle.size * .25, Math.min(scene.width - particle.size * .25, particle.x));
-    const neighbours = scene.deposits.filter(item => Math.abs(item.x * scene.width - x) < particle.size * .65 && depositOpacity(item) > .1).length;
+    let neighbours = 0;
+    for (const item of scene.deposits) {
+      if (Math.abs(item.x * scene.width - x) < particle.size * .65 && depositOpacity(item) > .1 && ++neighbours === 9) break;
+    }
     const floor = 6 + particle.size * .2 + Math.min(26, neighbours * 3);
     if (particle.y >= scene.height - floor) {
       if (scene.kind !== 'summer') {
