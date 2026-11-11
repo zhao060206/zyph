@@ -1449,7 +1449,7 @@ const Submission={
 
 /* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
 const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,Motion,storageGet,storageSet,
-  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close()),openAdmin:()=>Admin.open()});
+  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close(),{back:true}),openAdmin:()=>Admin.open()});
 
 /* ─── 组详情子页面 ─── */
 const GroupPage={
@@ -1458,7 +1458,7 @@ const GroupPage={
     this.el=$('#groupPage');
     this.previews=$('#gpPreviews');
     this.blank=$('#gpBlank');
-    $('#gpBack').addEventListener('click',()=>Motion.transition(()=>this.close()));
+    $('#gpBack').addEventListener('click',()=>Motion.transition(()=>this.close(),{back:true}));
     /* 预览图点击 → 打开悬浮窗 */
     this.previews.addEventListener('click',e=>{
       const item=e.target.closest('.gp-preview-item');
@@ -1789,8 +1789,13 @@ const Lightbox={
     this.el.hidden=false;
     this.el.classList.add('open');
     document.body.style.overflow='hidden';
+    Motion.present(this.el);
   },
   close(){
+    if(this.el.hidden)return;
+    Motion.dismiss(this.el,()=>this.finishClose());
+  },
+  finishClose(){
     this.el.classList.remove('open');
     this.el.hidden=true;
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}

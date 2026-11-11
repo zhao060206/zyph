@@ -1,12 +1,18 @@
-html[data-motion=full] [data-reveal].motion-pending{opacity:0;transform:translateY(8px);transition:opacity .3s var(--ease),transform .3s var(--ease);transition-delay:var(--reveal-delay,0ms)}
-html[data-motion=full] [data-reveal].is-revealed{opacity:1;transform:none}
+html[data-motion=full] [data-reveal].motion-pending{opacity:0;transition:opacity .3s var(--ease);transition-delay:var(--reveal-delay,0ms)}
+html[data-motion=full] [data-reveal].is-revealed{opacity:1}
 html[data-motion=full] button,html[data-motion=full] a,html[data-motion=full] select{transition:color .16s var(--ease),background-color .16s var(--ease),border-color .16s var(--ease)}
 html[data-motion=full] .album-cover,html[data-motion=full] .tone-photo,html[data-motion=full] .gp-thumb{transition:opacity .16s var(--ease)}
 @media(hover:hover){html[data-motion=full] .album-cover:hover,html[data-motion=full] .tone-photo:hover,html[data-motion=full] .gp-preview-item:hover .gp-thumb{opacity:.94}}
-::view-transition-old(root){animation:page-leave .16s var(--ease) both}
-::view-transition-new(root){animation:page-enter .3s var(--ease) both}
-@keyframes page-leave{to{opacity:0}}
-@keyframes page-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+:root{view-transition-name:page-content}
+.topbar{view-transition-name:site-navigation}
+::view-transition{pointer-events:none}
+::view-transition-group(page-content),::view-transition-group(site-navigation){animation:none}
+::view-transition-old(site-navigation),::view-transition-new(site-navigation){animation:none}
+::view-transition-image-pair(page-content){isolation:isolate}
+::view-transition-old(page-content){mix-blend-mode:plus-lighter;animation:page-fade-out 260ms cubic-bezier(.4,0,.2,1) both}
+::view-transition-new(page-content){mix-blend-mode:plus-lighter;animation:page-fade-in 260ms cubic-bezier(.4,0,.2,1) both}
+@keyframes page-fade-out{from{opacity:1}to{opacity:0}}
+@keyframes page-fade-in{from{opacity:0}to{opacity:1}}
 html[data-motion=lite] [data-reveal],html[data-motion=none] [data-reveal]{opacity:1;transform:none;transition:none}
 html[data-motion=lite] *,html[data-motion=lite] *::before,html[data-motion=lite] *::after,html[data-motion=none] *,html[data-motion=none] *::before,html[data-motion=none] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}

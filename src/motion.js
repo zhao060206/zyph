@@ -5,7 +5,10 @@ export function createMotionController() {
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const pointer = matchMedia('(hover:hover) and (pointer:fine)');
-  let tier = 'lite', started = false, testing = false, locked = false;
+  let tier = 'lite', started = false, testing = false;
+  let navigation = null, navigationId = 0;
+  const presences = new Map();
+  const ease = 'cubic-bezier(.22,1,.36,1)';
   let revealObserver = null, heroObserver = null, taskObserver = null;
   let raf = 0, previousFrame = 0, slowFrames = 0, sampledFrames = 0, monitorUntil = 0;
   let heroVisible = true, heroHeight = 0;
@@ -43,6 +46,12 @@ export function createMotionController() {
     if (save) cache(value);
     if (value === 'full') observe();
     else {
+      navigation?.skipTransition();
+      for (const [element, state] of presences) {
+        presences.delete(element);
+        state.animation.cancel();
+        state.done?.();
+      }
       if (raf) cancelAnimationFrame(raf); raf = 0;
       previousFrame = sampledFrames = slowFrames = monitorUntil = 0;
       if (revealObserver) revealObserver.disconnect(); revealObserver = null;
@@ -116,18 +125,57 @@ export function createMotionController() {
     if (!raf) raf = requestAnimationFrame(renderFrame);
   }
 
+  function presence(element, closing = false, done) {
+    const prior = presences.get(element);
+    if (closing && prior?.closing) return;
+    const opacity = prior ? getComputedStyle(element).opacity : null;
+    if (prior) {
+      presences.delete(element);
+      prior.animation.cancel();
+    }
+    if (tier !== 'full' || reduced.matches || !element.animate) { done?.(); return; }
+    const animation = element.animate([
+      { opacity: opacity ?? (closing ? 1 : 0) }, { opacity: closing ? 0 : 1 },
+    ], { duration: closing ? 200 : 260, easing: ease, fill: 'both' });
+    if (!animation.finished) { animation.cancel(); done?.(); return; }
+    const state = { animation, closing, done };
+    presences.set(element, state);
+    const finish = () => {
+      if (presences.get(element) !== state) return;
+      presences.delete(element);
+      done?.();
+      animation.cancel();
+    };
+    animation.finished.then(finish, finish);
+  }
+
   return {
     observe,
     get tier() { return tier; },
     downgrade(reason = 'season-pressure') { setTier('lite', reason); },
-    transition(update) {
-      if (tier !== 'full' || reduced.matches || !document.startViewTransition || locked) { update(); return; }
-      locked = true;
-      let applied = false;
-      try {
-        const transition = document.startViewTransition(() => { applied = true; update(); });
-        transition.finished.then(() => { locked = false; }, () => { locked = false; });
-      } catch (error) { locked = false; if (!applied) update(); }
+    present(element) { navigation?.skipTransition(); presence(element); },
+    dismiss(element, done) { presence(element, true, done); },
+    transition(update, { back = false } = {}) {
+      const id = ++navigationId;
+      navigation?.skipTransition(); navigation = null;
+      if (tier !== 'full' || reduced.matches) { update(); delete root.dataset.navigation; return; }
+      root.dataset.navigation = back ? 'back' : 'forward';
+      const cleanup = () => { if (id === navigationId) { navigation = null; delete root.dataset.navigation; } };
+      if (!document.startViewTransition) {
+        update();
+        const page = document.querySelector('#groupPage:not([hidden]),#archive:not([hidden])');
+        if (!page?.animate) { cleanup(); return; }
+        const animation = page.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: ease });
+        // The same cancellation path handles fallback animation and native snapshots.
+        navigation = { skipTransition: () => animation.cancel() };
+        animation.finished.then(cleanup, cleanup);
+        return;
+      }
+      const transition = document.startViewTransition(() => { if (id === navigationId) update(); });
+      navigation = transition;
+      transition.ready.catch(() => {}); // Skipping an interrupted snapshot rejects ready by design.
+      transition.updateCallbackDone.catch(error => console.error('Page navigation failed', error));
+      transition.finished.then(cleanup, cleanup);
     },
     start() {
       if (started) return; started = true;
