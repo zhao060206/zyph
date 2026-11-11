@@ -91,3 +91,41 @@ test('interrupted native navigation cannot apply an older pending destination', 
   await expect(page.locator('#archive')).toBeVisible();
   await expect(page.locator('#groupPage')).toBeHidden();
 });
+
+test('hidden scrollbars keep viewport width stable across viewer dismissal while page and panel scrolling work', async ({ page, browserName, isMobile }) => {
+  await page.goto('/');
+  await page.locator('.river-tile').first().waitFor();
+  const geometry = () => page.evaluate(() => ({
+    viewport: innerWidth, content: document.documentElement.clientWidth,
+    header: document.querySelector('.topbar').getBoundingClientRect().width,
+    river: document.querySelector('#photoRiver').getBoundingClientRect().width,
+  }));
+  const before = await geometry();
+  expect(before.content).toBe(before.viewport);
+  expect(await page.evaluate(() => CSS.supports('scrollbar-width', 'none')
+    ? getComputedStyle(document.documentElement).scrollbarWidth === 'none'
+    : getComputedStyle(document.documentElement, '::-webkit-scrollbar').display === 'none')).toBe(true);
+  await page.locator('.river-tile').first().evaluate(tile => { tile.focus({ preventScroll: true }); tile.click(); });
+  await expect(page.locator('#lbClose')).toBeFocused();
+  expect(await geometry()).toEqual(before);
+  await page.locator('#lbCaption').evaluate(el => { el.textContent = 'Scrollable photo description. '.repeat(300); });
+  const sidebar = page.locator('.lb-sidebar');
+  await sidebar.hover();
+  // Playwright cannot dispatch mouse wheels in mobile WebKit; verify its native scroll container via scrollBy.
+  if (browserName === 'webkit' && isMobile) await sidebar.evaluate(el => el.scrollBy(0, 350));
+  else await page.mouse.wheel(0, 350);
+  await expect.poll(() => sidebar.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  expect(await sidebar.evaluate(el => el.offsetWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await page.locator('#lbClose').click();
+  await expect(page.locator('#lightbox')).toBeHidden();
+  expect(await geometry()).toEqual(before);
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflowY)).not.toBe('hidden');
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.mouse.move(4, Math.floor(page.viewportSize().height / 2));
+  if (browserName === 'webkit' && isMobile) await page.evaluate(() => scrollBy(0, 250));
+  else await page.mouse.wheel(0, 250);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(0);
+});

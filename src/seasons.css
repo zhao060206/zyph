@@ -53,7 +53,7 @@ html[data-motion=lite] *,html[data-motion=none] *{backdrop-filter:none!important
  :root{--card-radius:20px;--image-radius:12px}
  .season-picker select{min-width:48px;padding-left:4px}
  #seasonEffects{width:36px}
- .tone-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+ .tone-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}
  .tone-filter{flex-shrink:0}
  .tone-card{padding:0}
  .tone-photo.proof{border-radius:20px}
