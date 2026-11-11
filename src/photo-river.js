@@ -21,7 +21,8 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
   const toggle = document.getElementById('riverMotion');
   const ratios = [.76, 1.22, .92, 1.42, .86, 1.08];
   let entries = [], columns = [], active = new Set(), cursor = 0, generation = 0;
-  let frame = 0, painted = 0, paintTick = -1, inView = true, hovering = false, focused = false, pendingLayout = false;
+  let frame = 0, painted = 0, paintTick = -1, inView = true, pendingLayout = false;
+  let keyboardNavigation = false;
   let layoutKey = '';
   let enabled = storageGet('pt_river_motion', 'on') !== 'off';
 
@@ -62,7 +63,9 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     const maximum = Math.min(entries.length, count * budget.slots);
     for (let columnIndex = 0; columnIndex < count; columnIndex++) {
       const element = document.createElement('div'); element.className = 'river-column';
-      const column = { element, slots: [], offset: -columnWidth * (columnIndex % 2 ? .72 : .2), speed: (innerWidth < 760 ? 23 : 34) + columnIndex * 3, gap };
+      const column = { element, slots: [], offset: -columnWidth * (columnIndex % 2 ? .72 : .2), speed: (innerWidth < 760 ? 23 : 34) + columnIndex * 3, gap, hovering: false, focused: false };
+      element.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') column.hovering = true; });
+      element.addEventListener('pointerleave', () => { column.hovering = false; });
       host.appendChild(element); columns.push(column);
       for (let row = columnIndex; row < maximum; row += count) {
         const entry = next();
@@ -83,12 +86,12 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
       }
       target?.focus({ preventScroll: true });
     }
-    focused = host.contains(document.activeElement);
+    for (const column of columns) column.focused = keyboardNavigation && column.element.contains(document.activeElement);
     sync();
   }
   function running() {
     return enabled && Motion.tier === 'full' && inView && !document.hidden && !document.getElementById('archive').hidden &&
-      root.dataset.dialogOpen !== 'true' && !hovering && !focused && entries.length > active.size;
+      root.dataset.dialogOpen !== 'true' && entries.length > active.size;
   }
   function sync() {
     if (!running()) {
@@ -114,6 +117,7 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     const delta = Math.min((time - (painted || time)) / 1000, .08);
     painted = time;
     for (const column of columns) {
+      if (column.hovering || column.focused) continue;
       column.offset -= column.speed * delta;
       const first = column.slots[0];
       if (first && column.offset + first.height + column.gap <= 0) {
@@ -133,10 +137,21 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     if (!tile) return;
     tile.focus({ preventScroll: true }); openPhoto(tile.dataset.day, Number(tile.dataset.photoIndex));
   });
-  host.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') { hovering = true; sync(); } });
-  host.addEventListener('pointerleave', () => { hovering = false; sync(); });
-  host.addEventListener('focusin', () => { focused = true; sync(); });
-  host.addEventListener('focusout', event => { if (!host.contains(event.relatedTarget)) { focused = false; sync(); } });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    keyboardNavigation = true;
+    for (const column of columns) column.focused = column.element.contains(document.activeElement);
+  });
+  document.addEventListener('pointerdown', () => {
+    keyboardNavigation = false;
+    for (const column of columns) column.focused = false;
+  }, { passive: true });
+  host.addEventListener('focusin', event => {
+    for (const column of columns) column.focused = keyboardNavigation && column.element.contains(event.target);
+  });
+  host.addEventListener('focusout', event => {
+    for (const column of columns) column.focused = keyboardNavigation && column.element.contains(event.relatedTarget);
+  });
   toggle.addEventListener('click', () => { enabled = !enabled; storageSet('pt_river_motion', enabled ? 'on' : 'off'); sync(); });
   function refreshLayout() {
     const budget = riverBudget(innerWidth, limited());
@@ -147,6 +162,7 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
   document.addEventListener('motion:change', refreshLayout);
   document.addEventListener('visibilitychange', sync);
   new MutationObserver(() => {
+    if (root.dataset.dialogOpen === 'true') for (const column of columns) column.hovering = false;
     if (root.dataset.dialogOpen !== 'true' && pendingLayout) { pendingLayout = false; layout(); }
     else sync();
   }).observe(root, { attributes: true, attributeFilter: ['data-dialog-open'] });

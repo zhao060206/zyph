@@ -12,9 +12,10 @@ export function createSeasonScene(kind, width, height, random = Math.random) {
   const budget = seasonBudget(kind, width);
   const scene = { kind, width, height, random, budget, particles: [], deposits: [] };
   for (let index = 0; index < budget.count; index++) {
-    const size = budget.minSize + random() * (budget.maxSize - budget.minSize);
+    const crystal = kind === 'winter' && index % 5 === 0;
+    const size = (budget.minSize + random() * (budget.maxSize - budget.minSize)) * (crystal ? 1.65 : 1);
     scene.particles.push({ x: random() * width, y: index < 2 ? height - size * 1.3 : random() * height,
-      size, phase: random() * Math.PI * 2, spin: random() * 2 - 1, sprite: index % 3,
+      size, phase: random() * Math.PI * 2, spin: random() * 2 - 1, sprite: crystal ? 3 + Math.floor(index / 5) % 2 : index % 3,
       speed: kind === 'summer' ? 9 + random() * 12 : kind === 'winter' ? 28 + random() * 32 : 38 + random() * 36,
       alpha: .7 + random() * .25 });
   }

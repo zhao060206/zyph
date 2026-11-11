@@ -30,6 +30,31 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       await image.decode();
       return image;
     }
+    // A small proportion of larger six-armed crystals complements the softer snow grains.
+    if (index >= 3) {
+      const sprite = document.createElement('canvas');
+      sprite.width = sprite.height = 96;
+      const drawing = sprite.getContext('2d');
+      drawing.translate(48, 48);
+      const crystal = () => {
+        drawing.beginPath();
+        for (let arm = 0; arm < 6; arm++) {
+          drawing.save(); drawing.rotate(arm * Math.PI / 3);
+          drawing.moveTo(0, 0); drawing.lineTo(0, -37);
+          for (const branch of index === 3 ? [18, 28] : [15, 25, 32]) {
+            const reach = branch > 28 ? 5 : 9;
+            drawing.moveTo(0, -branch); drawing.lineTo(-reach, -branch - reach);
+            drawing.moveTo(0, -branch); drawing.lineTo(reach, -branch - reach);
+          }
+          drawing.restore();
+        }
+        drawing.stroke();
+      };
+      drawing.lineCap = drawing.lineJoin = 'round';
+      drawing.strokeStyle = 'rgba(91,129,164,.75)'; drawing.lineWidth = 4.5; crystal();
+      drawing.strokeStyle = '#f8fcff'; drawing.lineWidth = 2.6; crystal();
+      return sprite;
+    }
     // Small irregular snow clusters, shaded across their surface rather than outlined.
     const sprite = document.createElement('canvas');
     sprite.width = sprite.height = 64;
@@ -91,7 +116,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     const token = ++generation, kind = root.dataset.season;
     let materials;
     try {
-      materials = kind === 'summer' ? [makeLight()] : await Promise.all([0,1,2].map(index => makeSprite(kind,index)));
+      materials = kind === 'summer' ? [makeLight()] : await Promise.all((kind === 'winter' ? [0,1,2,3,4] : [0,1,2]).map(index => makeSprite(kind,index)));
     } catch (error) {
       if (token === generation) { starting = false; root.dataset.seasonEffects = 'unavailable'; console.error('Season material failed to load', error); }
       return;
