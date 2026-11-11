@@ -7,9 +7,10 @@ html[data-theme=dark][data-season=summer]{--bg:#101c19;--panel:#182622;--surface
 html[data-theme=dark][data-season=autumn]{--bg:#211912;--panel:#2b211b;--surface-subtle:#35291f;--surface-hover:#423328;--text:#f4eadd;--muted:#c7b099;--text-dim:#c7b099;--text-faint:#c1aa93;--sun:#dbb17f;--coral:#e0a18a;--accent:#d2ac7b;--season-wash:#3b281c;--season-secondary:#392120;--season-ink:#c7a17c}
 html[data-theme=dark][data-season=winter]{--bg:#121b27;--panel:#1b2633;--surface-subtle:#243342;--surface-hover:#304457;--text:#edf2fa;--muted:#a8bbce;--text-dim:#a8bbce;--text-faint:#a3b6ca;--sun:#a8c5df;--coral:#a0c6e5;--accent:#bad0e5;--season-wash:#233750;--season-secondary:#1c3040;--season-ink:#a5bed6}
 :root{--card-radius:24px;--image-radius:12px;--control-radius:12px;--ease:cubic-bezier(.22,1,.36,1);--shadow-sm:0 1px 2px #00000008;--shadow-card:none;--shadow-hover:none}
-body{background:var(--bg)}
-.season-canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10;contain:strict}
-.gallery-section>.section-heading,.archive-toolbar{position:relative;z-index:20}
+body{background:var(--bg);isolation:isolate}
+.season-canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;contain:strict}
+#archive,#groupPage{position:relative;z-index:1}
+.exhibition-hero{background:transparent}
 .season-controls{display:none}
 .nav-end .season-controls{display:flex;align-items:center;gap:4px}
 .season-picker select{appearance:none;border:0;border-radius:var(--control-radius);background:transparent;color:inherit;font:13px var(--sans);min-height:44px;min-width:60px;padding:8px 24px 8px 12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238e9893' stroke-width='1.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}

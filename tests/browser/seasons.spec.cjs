@@ -38,6 +38,55 @@ test('calendar defaults, manual seasons, dark mode and storage remember independ
   await expect(page.locator('html')).toHaveAttribute('data-season', 'summer');
 });
 
+test('season layer remains visible in the background without painting over river, album, tone or group photographs', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.addInitScript(() => {
+    localStorage.setItem('pt_river_motion', 'off');
+    const pending = new Set(), request = requestAnimationFrame.bind(window), cancel = cancelAnimationFrame.bind(window);
+    window.requestAnimationFrame = callback => {
+      const id = request(time => { pending.delete(id); callback(time); });
+      pending.add(id); return id;
+    };
+    window.cancelAnimationFrame = id => { pending.delete(id); cancel(id); };
+    window.__stopFrames = () => { pending.forEach(cancel); pending.clear(); };
+  });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-season-effects', 'running');
+  async function verifyPhoto(selector, index = 0) {
+    const photo = page.locator(selector).nth(index);
+    await photo.scrollIntoViewIfNeeded();
+    await photo.locator('img').evaluate(img => img.decode());
+    const box = await photo.boundingBox();
+    const clip = { x: Math.round(box.x + box.width / 2 - 8), y: Math.round(box.y + box.height / 2 - 8), width: 16, height: 16 };
+    await page.evaluate(() => {
+      window.__stopFrames();
+      const canvas = document.querySelector('.season-canvas');
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    });
+    const clean = await page.screenshot({ clip, animations: 'disabled' });
+    await page.evaluate(() => {
+      window.__stopFrames();
+      const canvas = document.querySelector('.season-canvas'), context = canvas.getContext('2d');
+      context.fillStyle = '#ff00ff'; context.fillRect(0, 0, innerWidth, innerHeight);
+    });
+    expect((await page.screenshot({ clip, animations: 'disabled' })).equals(clean)).toBe(true);
+  }
+  await verifyPhoto('.river-tile', 1);
+  await verifyPhoto('.album-cover');
+  const gap = { x: 2, y: Math.floor(page.viewportSize().height / 2), width: 4, height: 4 };
+  const paintedGap = await page.screenshot({ clip: gap });
+  await page.locator('.season-canvas').evaluate(canvas => canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height));
+  expect((await page.screenshot({ clip: gap })).equals(paintedGap)).toBe(false);
+  await page.locator('[data-gallery-mode=tone]').click();
+  await verifyPhoto('.tone-photo');
+  await page.locator('#themeBtn').click();
+  await verifyPhoto('.tone-photo');
+  await page.locator('.tone-source').first().click();
+  await expect(page.locator('#groupPage')).toBeVisible();
+  await expect(page.locator('html')).not.toHaveAttribute('data-navigation');
+  await verifyPhoto('.gp-thumb');
+});
+
 test('single effects canvas pauses for dialogs, respects budget and releases buffers on opt-out', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-season-effects', 'running');
