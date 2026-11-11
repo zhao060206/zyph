@@ -16,10 +16,8 @@ try {
     await indexReady;
     for (const season of ['spring', 'summer', 'autumn', 'winter']) {
       await page.locator('#seasonSelect').selectOption(season);
-      await page.locator('#heroImage').evaluate(async img => {
-        await img.decode();
-        await Promise.allSettled(img.getAnimations().map(animation => animation.finished));
-      });
+      await page.locator('.river-tile img').evaluateAll(images => Promise.allSettled(images.map(img => img.decode())));
+      await page.waitForTimeout(800);
       await page.screenshot({ path: `qa-${season}-${mobile ? 'mobile' : 'desktop'}.png` });
       results.push(await page.evaluate(() => ({ season: document.documentElement.dataset.season, width: innerWidth, documentWidth: document.documentElement.scrollWidth, tier: document.documentElement.dataset.motion, effects: document.documentElement.dataset.seasonEffects, pixels: [...document.querySelectorAll('.season-canvas')].reduce((sum, canvas) => sum + canvas.width * canvas.height, 0) })));
     }

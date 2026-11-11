@@ -48,9 +48,7 @@ export function createMotionController() {
       if (revealObserver) revealObserver.disconnect(); revealObserver = null;
       revealTargets.clear();
       if (taskObserver) taskObserver.disconnect(); taskObserver = null;
-      document.querySelectorAll('.hero-image').forEach(image => {
-        if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
-      });
+
     }
   }
   const limits = restriction();
@@ -122,13 +120,6 @@ export function createMotionController() {
     observe,
     get tier() { return tier; },
     downgrade(reason = 'season-pressure') { setTier('lite', reason); },
-    enterImage(image) {
-      if (tier !== 'full' || reduced.matches || !image.animate || document.hidden) return;
-      if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
-      image.animate([{ opacity: .7 }, { opacity: 1 }], {
-        duration: 350, easing: 'cubic-bezier(.22,1,.36,1)',
-      });
-    },
     transition(update) {
       if (tier !== 'full' || reduced.matches || !document.startViewTransition || locked) { update(); return; }
       locked = true;

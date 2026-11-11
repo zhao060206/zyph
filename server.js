@@ -601,6 +601,8 @@ const publicFiles = new Map([
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
+  ...['spring', 'autumn'].flatMap(kind => [0,1,2].map(index => [`/assets/season/${kind}-${index}.webp`, [`public/season-assets/${kind}-${index}.webp`, 'image/webp']])),
+  ['/assets/season/ATTRIBUTION.md', ['public/season-assets/ATTRIBUTION.md', 'text/markdown; charset=utf-8']],
   ['/assets/tone-index.json', ['public/tone-index.json', 'application/json; charset=utf-8']],
 ]);
 

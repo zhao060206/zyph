@@ -42,7 +42,7 @@ test('gallery, search, year filter, empty album and themes work without script e
   await expect(page.locator('[data-toggle-sheet="2025-06-08"]')).toHaveAttribute('aria-expanded', 'false');
   await page.locator('[data-toggle-sheet="2026-10-25"]').click();
   await expect(page.locator('.contact-sheet')).toHaveCount(0);
-  await expect(page.locator('#heroTitle')).toHaveText('秋日园博园');
+  await expect(page.locator('#heroTitle')).toHaveText('Phototropic');
   await expect(page.locator('#voteNoticeModal')).toBeHidden();
   await page.locator('#archiveSearch').fill('杭州');
   await expect(page.locator('.album-card')).toHaveCount(1);
@@ -61,7 +61,7 @@ test('gallery, search, year filter, empty album and themes work without script e
 
 test('photo viewer, likes, comments, deletion and keyboard focus work', async ({ page }) => {
   await page.goto('/');
-  await page.locator('#heroFeature').click();
+  await page.locator('.album-cover').first().click();
   await page.locator('.gp-preview-item').first().click();
   await expect(page.locator('#lightbox')).toBeVisible();
   await expect(page.locator('#lbClose')).toBeFocused();
@@ -91,7 +91,7 @@ test('mobile layout has no overflow at small, portrait and landscape sizes', asy
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('#themeBtn').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  expect(await page.locator('.hero-media').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  expect(await page.locator('#photoRiver').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 });
 
 test('admin publishes and ends an activity, history persists, and the next draft is independent', async ({ page }) => {
@@ -183,7 +183,7 @@ test('blocked browser storage keeps the gallery usable and missing previews do n
 
 test('failed comment deletion preserves the comment and displays a failure', async ({ page }) => {
   await page.goto('/');
-  await page.locator('#heroFeature').click();
+  await page.locator('.album-cover').first().click();
   await page.locator('.gp-preview-item').first().click();
   await expect(page.locator('#cmSend')).toBeEnabled();
   await page.locator('#cmInput').fill('删除失败时应该保留');
@@ -195,34 +195,33 @@ test('failed comment deletion preserves the comment and displays a failure', asy
   await expect(page.locator('#cmList')).toContainText('删除失败时应该保留');
 });
 
-test('motion grading respects reduced motion and low memory, while rich mode keeps carousel navigation working', async ({ page, context }) => {
+test('motion grading respects reduced motion and low memory, while photo selection preserves focus', async ({ page, context }) => {
   await page.addInitScript(() => sessionStorage.setItem('pt_motion_grade_v1', JSON.stringify({ tier: 'full', timestamp: Date.now() })));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'full');
-  await expect(page.locator('#heroTitle')).toHaveText('秋日园博园');
-  await page.locator('#heroNext').click();
-  await expect(page.locator('#heroTitle')).toHaveText('街头拾光');
-  await page.locator('#heroExplore').click();
-  await expect(page.locator('#groupPage')).toBeVisible();
-  await expect(page.locator('#gpTitle')).toHaveText('街头拾光');
-  await page.locator('#gpBack').click();
-  await expect(page.locator('#archive')).toBeVisible();
+  await expect(page.locator('#heroTitle')).toHaveText('Phototropic');
+  await expect(page.locator('.river-tile')).toHaveCount(2);
+  await page.locator('.river-tile').first().click();
+  await expect(page.locator('#lightbox')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.river-tile').first()).toBeFocused();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'none');
-  expect(await page.locator('#heroImage').evaluate(el => el.getAnimations().length)).toBe(0);
+  await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'false');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 2 }));
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'lite');
   await expect(page.locator('html')).toHaveAttribute('data-motion-reason', 'device-budget');
-  await expect(page.locator('#heroImage')).toHaveCSS('transition-duration', '0s');
+  await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'false');
 });
 
 test('interaction grading ignores sparse input gaps and downgrades sustained slow frames', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => {
     localStorage.setItem('pt_season_effects', 'off');
+    localStorage.setItem('pt_river_motion', 'off');
     sessionStorage.setItem('pt_motion_grade_v1', JSON.stringify({ tier: 'full', timestamp: Date.now() }));
     Object.defineProperty(navigator, 'hardwareConcurrency', { configurable: true, value: 8 });
     Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 8 });
@@ -232,7 +231,7 @@ test('interaction grading ignores sparse input gaps and downgrades sustained slo
     window.cancelAnimationFrame = id => clearTimeout(id);
   });
   await page.goto('/');
-  await expect(page.locator('#heroTitle')).toHaveText('秋日园博园');
+  await expect(page.locator('#heroTitle')).toHaveText('Phototropic');
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'full');
   // Events 50ms apart are ordinary sparse input, not evidence of missed display frames.
   await page.evaluate(() => new Promise(resolve => {
@@ -251,8 +250,8 @@ test('interaction grading ignores sparse input gaps and downgrades sustained slo
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'lite');
   await expect(page.locator('html')).toHaveAttribute('data-motion-reason', 'interaction-frame-pressure');
   await page.evaluate(() => clearInterval(window.__slowInput));
-  await expect(page.locator('#heroImage')).toHaveCSS('transition-duration', '0s');
-  await page.locator('#heroFeature').click();
+  await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'false');
+  await page.locator('.album-cover').first().click();
   await expect(page.locator('#groupPage')).toBeVisible();
 });
 
@@ -283,6 +282,6 @@ test('slow foreground grading honors changing preferences and data saver overrid
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'lite');
   await expect(page.locator('html')).toHaveAttribute('data-motion-reason', 'data-saver');
-  await page.locator('#heroFeature').click();
+  await page.locator('.album-cover').first().click();
   await expect(page.locator('#groupPage')).toBeVisible();
 });

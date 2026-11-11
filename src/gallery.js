@@ -1,11 +1,10 @@
 import { TONES, resolveTone, toneGroups } from './tones.mjs';
-import { SEASONS } from './seasons.js';
+import { createPhotoRiver } from './photo-river.js';
 
-export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, featuredPhoto, Motion, openGroup, openProof, closeGroup, openAdmin }) {
+export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, Motion, storageGet, storageSet, openGroup, openProof, closeGroup, openAdmin }) {
   return {
     openDays: new Set(),
     toneIndex: {},
-    seasonCovers: {},
     mode: 'archive',
     selectedTone: 'all',
     limit: 24,
@@ -19,18 +18,13 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       $('#heroCounts').innerHTML = `<span><strong>${count}</strong>照片</span><span><strong>${Store.groups.length}</strong>组故事</span><span><strong>${YEARS().length}</strong>年时光</span>`;
       $('#archiveSource').hidden = Store.remote;
       $('#archiveSource').textContent = Store.remote ? '' : '演示作品 · 云端暂时不可用';
-      this.slides = [...Store.groups].sort((a, b) => b.d.localeCompare(a.d)).filter(g => g.gs.length);
-      const feature = $('#heroFeature');
-      feature.disabled = !this.slides.length;
-      $('#heroExplore').disabled = !this.slides.length;
-      if (this.slides.length) this.paintHero(0);
-      $('#heroPrev').hidden = $('#heroNext').hidden = this.slides.length < 2;
+      if (!this.river) this.river = createPhotoRiver({ host: $('#photoRiver'), Motion, url: pURL, openPhoto: openProof, storageGet, storageSet });
+      this.river.update(Store.groups);
       const validDays = new Set(Store.groups.filter(g => g.gs.length).map(g => g.d));
       for (const day of [...this.openDays]) {
         if (!validDays.has(day)) this.openDays.delete(day);
       }
       this.render();
-      if (this.bound) this.seasonHero();
       if (this.bound) return;
       this.bound = true;
       fetch('/assets/tone-index.json').then(response => {
@@ -39,11 +33,8 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
       }).then(data => {
         if (data.version !== 1 || !data.photos || typeof data.photos !== 'object') throw new Error('色调索引格式无效');
         this.toneIndex = data.photos;
-        this.seasonCovers = data.covers || {};
         if (this.mode === 'tone') this.render();
-        if (!this.heroManual) this.seasonHero();
       }).catch(() => { if (this.mode === 'tone') this.render(); });
-      document.addEventListener('season:change', () => this.seasonHero());
       $('#galleryMode').addEventListener('click', event => {
         const button = event.target.closest('[data-gallery-mode]');
         if (!button || this.mode === button.dataset.galleryMode) return;
@@ -83,10 +74,6 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
         const target = event.target.closest('[data-day]');
         if (target) { target.focus({ preventScroll: true }); openGroup(target.dataset.day); }
       });
-      feature.addEventListener('click', () => openGroup(feature.dataset.day));
-      $('#heroExplore').addEventListener('click', () => feature.click());
-      $('#heroPrev').addEventListener('click', () => { this.heroManual = true; this.paintHero((this.heroIndex - 1 + this.slides.length) % this.slides.length); });
-      $('#heroNext').addEventListener('click', () => { this.heroManual = true; this.paintHero((this.heroIndex + 1) % this.slides.length); });
       $('#expandAll').addEventListener('click', () => {
         Store.groups.forEach(g => { if (g.gs.length) this.openDays.add(g.d); });
         this.render();
@@ -108,52 +95,6 @@ export function createArchive({ $, Store, YEARS, totalPhotos, esc, pURL, pView, 
           requestAnimationFrame(() => $(hash).scrollIntoView());
         });
       }
-    },
-    seasonHero() {
-      const season = document.documentElement.dataset.season;
-      const config = SEASONS[season];
-      if (!config || !this.slides.length) return;
-      const curated = this.seasonCovers[season];
-      let chosen = null, albumIndex = -1;
-      if (curated) albumIndex = this.slides.findIndex(group => { chosen = group.gs.find(photo => photo.k === curated); return !!chosen; });
-      if (albumIndex < 0) {
-        albumIndex = this.slides.findIndex(group => {
-          chosen = group.gs.find(photo => config.groups.includes(resolveTone(photo, this.toneIndex)?.group));
-          return !!chosen;
-        });
-      }
-      this.heroManual = false;
-      if (albumIndex >= 0) this.paintHero(albumIndex, chosen);
-    },
-    paintHero(index, chosenPhoto) {
-      this.heroIndex = index;
-      const group = this.slides[index];
-      const photo = chosenPhoto || (index === 0 ? group.gs.find(p => p.k === featuredPhoto) || group.gs[0] : group.gs[0]);
-      const feature = $('#heroFeature'), img = $('#heroImage');
-      feature.dataset.day = group.d;
-      feature.dataset.photo = photo.k || photo.u;
-      feature.dataset.shared = String(photo === group.gs[0]);
-      feature.setAttribute('aria-label', '查看 ' + group.title);
-      $('#heroTitle').textContent = group.title;
-      $('#heroDate').textContent = group.d.replace(/-/g, ' / ');
-      $('#heroLoc').textContent = group.loc;
-      $('#heroSlideIndex').textContent = `${String(index + 1).padStart(2, '0')} / ${String(this.slides.length).padStart(2, '0')}`;
-      const generation = this.heroGeneration = (this.heroGeneration || 0) + 1;
-      let triedSmall = false;
-      img.alt = photo.t || group.title;
-      img.onload = () => {
-        if (this.heroGeneration !== generation) return;
-        img.hidden = false; feature.classList.remove('image-error');
-        Motion.enterImage(img);
-      };
-      img.onerror = () => {
-        if (this.heroGeneration !== generation) return;
-        const small = pURL(photo, 480);
-        if (!triedSmall && small !== img.getAttribute('src')) { triedSmall = true; img.src = small; return; }
-        feature.classList.add('image-error');
-      };
-      img.hidden = false;
-      img.src = navigator.connection && navigator.connection.saveData ? pURL(photo, 480) : pView(photo);
     },
     sheetHTML(g, eager = false) {
       return `<div class="album-inline"><div class="contact-sheet">${g.gs.map((p, j) => `<button class="proof" type="button" data-day="${g.d}" data-proof-idx="${j}" aria-label="查看 ${esc(p.t)}"><img src="${esc(pURL(p, 300))}" alt="${esc(p.t)}" loading="${eager && j < 16 ? 'eager' : 'lazy'}" decoding="async" width="300" height="300"><span class="pf-num">${String(j + 1).padStart(2, '0')}</span></button>`).join('')}</div></div>`;

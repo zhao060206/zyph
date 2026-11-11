@@ -149,7 +149,6 @@ const DEMO_GROUPS=[
 
 /* ─── 云端配置:腾讯云 COS(图片 + 组数据) ─── */
 const CONFIG={
-  featuredPhoto:'photos/2026-10-25/13_1792931647538.jpg',
   cosBucket:'zhao-1465501838',  /* 存储桶名(控制台可复制) */
   cosRegion:'ap-nanjing',       /* 存储桶所在地域 */
   apiBase:''                    /* 互动接口地址:同源部署留空即可(走相对路径 /api/…);前后端分域时填后端完整域名 */
@@ -1449,7 +1448,7 @@ const Submission={
 };
 
 /* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
-const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,featuredPhoto:CONFIG.featuredPhoto,Motion,
+const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,Motion,storageGet,storageSet,
   openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close()),openAdmin:()=>Admin.open()});
 
 /* ─── 组详情子页面 ─── */
@@ -1514,7 +1513,6 @@ const GroupPage={
           ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
         </div>
       </figure>`).join('');
-    if(this.g.d===$('#heroFeature').dataset.day&&$('#heroFeature').dataset.shared==='true'){const cover=this.previews.querySelector('img');if(cover)cover.style.viewTransitionName='featured-photo'}
     Motion.observe(this.previews);
     /* 图片懒加载动画 */
     this.previews.querySelectorAll('img').forEach(img=>{
@@ -2863,16 +2861,16 @@ const Admin={
         if(f)src=await this.readFileText(f);
       }
       if(!src){this.status('未能取得页面源码:请点上方选择文件,选定 index.html 后再发布','no');return}
-      const [appResponse,cssResponse,toneResponse]=await Promise.all([fetchWithTimeout('/assets/app.js'),fetchWithTimeout('/assets/site.css'),fetchWithTimeout('/assets/tone-index.json')]);
-      if(!appResponse.ok||!cssResponse.ok||!toneResponse.ok)throw new Error('页面资源读取失败，未写入不完整备份');
-      const [appSource,cssSource,toneSource]=await Promise.all([appResponse.text(),cssResponse.text(),toneResponse.text()]);
+      const assets = ['assets/app.js','assets/site.css','assets/tone-index.json',
+        ...['spring','autumn'].flatMap(kind => [0,1,2].map(index => `assets/season/${kind}-${index}.webp`)), 'assets/season/ATTRIBUTION.md'];
+      const responses = await Promise.all(assets.map(asset => fetchWithTimeout('/'+asset)));
+      if(responses.some(response => !response.ok))throw new Error('页面资源读取失败，未写入不完整备份');
+      const blobs = await Promise.all(responses.map(response => response.blob()));
       this.status('正在备份页面与浏览资源…');
-      await this.put('assets/app.js',new Blob([appSource],{type:'text/javascript'}));
-      await this.put('assets/site.css',new Blob([cssSource],{type:'text/css'}));
-      await this.put('assets/tone-index.json',new Blob([toneSource],{type:'application/json'}));
+      for(let index=0;index<assets.length;index++)await this.put(assets[index],blobs[index]);
       await this.put('index.html',new Blob([src],{type:'text/html; charset=utf-8'}));
-      this.status('页面与三份资源已备份','ok');
-      out.hidden=false;out.textContent='已备份 index.html、脚本、样式与色调索引。正式网站版本仍由 GitHub 中的代码和部署平台管理。';
+      this.status('页面与浏览资源已备份','ok');
+      out.hidden=false;out.textContent='已备份 index.html、脚本、样式、色调索引与季节素材。正式网站版本仍由 GitHub 中的代码和部署平台管理。';
 
     }catch(err){
       this.status('发布失败:'+(err&&err.message?err.message:'请检查密钥与存储桶权限'),'no');

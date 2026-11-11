@@ -33,7 +33,7 @@ try {
         await new Promise(resolve => setTimeout(resolve, 40));
       }
     }, count);
-    await page.locator('#heroImage').evaluate(img => img.decode());
+    await page.locator('.river-tile img').evaluateAll(images => Promise.allSettled(images.map(img => img.decode())));
     await page.waitForTimeout(600);
   }
   async function measurement() {
@@ -42,7 +42,7 @@ try {
     return page.evaluate(heap => ({ usedHeapBytes: heap.usedSize, listenersRegistered: window.__seasonQA.listeners,
       pendingFrames: window.__seasonQA.pending.size, canvasCount: document.querySelectorAll('.season-canvas').length,
       canvasPixels: [...document.querySelectorAll('.season-canvas')].reduce((sum, item) => sum + item.width * item.height, 0),
-      renderedPhotos: document.querySelectorAll('.tone-card').length, motion: document.documentElement.dataset.motion }), heap);
+      riverTiles: document.querySelectorAll('.river-tile').length, renderedPhotos: document.querySelectorAll('.tone-card').length, motion: document.documentElement.dataset.motion }), heap);
   }
   await switches(20);
   const warm = await measurement();
@@ -51,6 +51,7 @@ try {
   await switches(50);
   const after100 = await measurement();
   await page.locator('#seasonEffects').click();
+  await page.locator('#riverMotion').click();
   await page.waitForTimeout(600);
   const stopped = await measurement();
   const results = { warm, after50, after100, stopped };

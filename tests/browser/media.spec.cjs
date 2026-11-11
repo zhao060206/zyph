@@ -77,9 +77,9 @@ test('page backup includes the tone index and refuses to write when a required a
   await page.locator('#adminPublish').click();
   await expect(page.locator('#pubOut')).toContainText('色调索引');
   const calls = await page.evaluate(() => window.__testUploads.calls);
-  expect(calls.map(call => call.key)).toEqual(['assets/app.js', 'assets/site.css', 'assets/tone-index.json', 'index.html']);
+  expect(calls.map(call => call.key)).toEqual(['assets/app.js', 'assets/site.css', 'assets/tone-index.json', ...['spring','autumn'].flatMap(kind => [0,1,2].map(index => `assets/season/${kind}-${index}.webp`)), 'assets/season/ATTRIBUTION.md', 'index.html']);
   await page.evaluate(() => { window.__testUploads.calls = []; });
-  await page.route('**/assets/tone-index.json', route => route.fulfill({ status: 503 }));
+  await page.route('**/assets/season/autumn-1.webp', route => route.fulfill({ status: 503 }));
   await page.locator('#adminPublish').click();
   await expect(page.locator('#adminStatus')).toContainText('未写入不完整备份');
   expect(await page.evaluate(() => window.__testUploads.calls)).toEqual([]);

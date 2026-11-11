@@ -1,4 +1,3 @@
-html[data-motion=full] #heroFeature[data-shared=true] .hero-image{view-transition-name:featured-photo}
 html[data-motion=full] [data-reveal].motion-pending{opacity:0;transform:translateY(8px);transition:opacity .3s var(--ease),transform .3s var(--ease);transition-delay:var(--reveal-delay,0ms)}
 html[data-motion=full] [data-reveal].is-revealed{opacity:1;transform:none}
 html[data-motion=full] button,html[data-motion=full] a,html[data-motion=full] select{transition:color .16s var(--ease),background-color .16s var(--ease),border-color .16s var(--ease)}
@@ -6,7 +5,6 @@ html[data-motion=full] .album-cover,html[data-motion=full] .tone-photo,html[data
 @media(hover:hover){html[data-motion=full] .album-cover:hover,html[data-motion=full] .tone-photo:hover,html[data-motion=full] .gp-preview-item:hover .gp-thumb{opacity:.94}}
 ::view-transition-old(root){animation:page-leave .16s var(--ease) both}
 ::view-transition-new(root){animation:page-enter .3s var(--ease) both}
-::view-transition-group(featured-photo){animation-duration:.3s;animation-timing-function:var(--ease)}
 @keyframes page-leave{to{opacity:0}}
 @keyframes page-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 html[data-motion=lite] [data-reveal],html[data-motion=none] [data-reveal]{opacity:1;transform:none;transition:none}

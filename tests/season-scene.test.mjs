@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSeasonScene, stepSeasonScene, depositOpacity, resizeSeasonScene, seasonBudget } from '../src/season-scene.mjs';
+import { createSeasonScene, stepSeasonScene, depositOpacity, resizeSeasonScene, seasonBudget, particlePose, depositPose } from '../src/season-scene.mjs';
 
 test('large leaves land at the viewport floor, form a pile and fade away when no more arrive', () => {
   const scene = createSeasonScene('autumn', 1440, 1000, () => .5);
@@ -47,4 +47,20 @@ test('snow accumulates and expires, while sunlight dust never creates a solid pi
     for (let step = 0; step < 300; step++) stepSeasonScene(scene, 1 / 30, step / 30);
     assert.equal(scene.deposits.length > 0, kind === 'winter');
   }
+});
+
+test('landing meets the existing pile and inherits the airborne pose before settling', () => {
+  const scene = createSeasonScene('autumn', 1000, 700, () => .5);
+  scene.particles = [scene.particles[0]];
+  const particle = scene.particles[0];
+  particle.x = 500; particle.y = 690;
+  scene.deposits = [{ x: .5, floor: 12, size: 40, age: 0, hold: 8, fade: 24, alpha: .8 }];
+  const pose = particlePose(particle, 2);
+  stepSeasonScene(scene, 0, 2);
+  const landed = scene.deposits[1];
+  assert.equal(landed.floor, 6 + particle.size * .2 + 3);
+  assert.deepEqual(depositPose(landed), pose);
+  landed.age = .85;
+  assert.equal(depositPose(landed).flatten, .48);
+  assert.ok(Math.abs(depositPose(landed).rotation - pose.rotation) <= .175);
 });

@@ -26,6 +26,18 @@ export function depositOpacity(deposit) {
   return deposit.alpha * (1 - progress * progress * (3 - 2 * progress));
 }
 
+export function particlePose(particle, time) {
+  return { rotation: particle.phase + Math.sin(time * .65 + particle.phase) * .7 + time * particle.spin * .13,
+    flatten: .4 + Math.abs(Math.sin(time * .9 + particle.phase)) * .6 };
+}
+
+export function depositPose(deposit) {
+  const settle = Math.min(1, deposit.age / .85);
+  const eased = settle * settle * (3 - 2 * settle);
+  return { rotation: deposit.rotation + deposit.restTurn * eased,
+    flatten: deposit.flatten + (.48 - deposit.flatten) * eased };
+}
+
 export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = false) {
   const pileLimit = Math.floor(scene.budget.pileLimit * quality);
   for (let index = scene.deposits.length - 1; index >= 0; index--) {
@@ -41,13 +53,14 @@ export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = fals
     particle.x += (Math.sin(time * .65 + particle.phase) * 17 + (scene.kind === 'autumn' ? 8 : 3)) * delta;
     if (particle.x < -particle.size) particle.x = scene.width + particle.size;
     if (particle.x > scene.width + particle.size) particle.x = -particle.size;
-    if (particle.y >= scene.height - 6 - particle.size * .2) {
+    const x = Math.max(particle.size * .25, Math.min(scene.width - particle.size * .25, particle.x));
+    const neighbours = scene.deposits.filter(item => Math.abs(item.x * scene.width - x) < particle.size * .65 && depositOpacity(item) > .1).length;
+    const floor = 6 + particle.size * .2 + Math.min(26, neighbours * 3);
+    if (particle.y >= scene.height - floor) {
       if (scene.kind !== 'summer') {
-        const x = Math.max(particle.size * .25, Math.min(scene.width - particle.size * .25, particle.x));
-        const neighbours = scene.deposits.filter(item => Math.abs(item.x * scene.width - x) < particle.size * .65).length;
         if (scene.deposits.length === pileLimit) scene.deposits.shift();
-        scene.deposits.push({ x: x / scene.width, floor: 6 + particle.size * .2 + Math.min(26, neighbours * 3),
-          size: particle.size, sprite: particle.sprite, rotation: scene.random() * Math.PI * 2,
+        scene.deposits.push({ x: x / scene.width, floor,
+          size: particle.size, sprite: particle.sprite, rotation: particlePose(particle, time).rotation, flatten: particlePose(particle, time).flatten, restTurn: (scene.random() - .5) * .35,
           alpha: particle.alpha, age: 0, hold: 6 + scene.random() * 4, fade: 18 + scene.random() * 10 });
       }
       particle.y = -particle.size;
