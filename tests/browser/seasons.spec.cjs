@@ -38,6 +38,28 @@ test('calendar defaults, manual seasons, dark mode and storage remember independ
   await expect(page.locator('html')).toHaveAttribute('data-season', 'summer');
 });
 
+test('winter blue-gray background reveals a mixed snow field with grains and pre-rendered crystals', async ({ page }) => {
+  await page.addInitScript(() => {
+    const draw = CanvasRenderingContext2D.prototype.drawImage;
+    window.__snowTextures = new Set();
+    CanvasRenderingContext2D.prototype.drawImage = function(image, ...args) {
+      if (this.canvas.classList.contains('season-canvas') && image instanceof HTMLCanvasElement) window.__snowTextures.add(image.width);
+      return draw.call(this, image, ...args);
+    };
+  });
+  await page.goto('/');
+  await page.locator('#seasonSelect').selectOption('winter');
+  await expect(page.locator('html')).toHaveAttribute('data-season-effects', 'running');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(194, 206, 222)');
+  await expect.poll(() => page.evaluate(() => [...window.__snowTextures].sort((a,b) => a-b))).toEqual([64,96]);
+  expect(await page.locator('.season-canvas').evaluate(canvas => canvas.width * canvas.height)).toBeLessThanOrEqual(2000000);
+  await page.locator('#themeBtn').click();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(18, 27, 39)');
+  await expect(page.locator('.season-canvas')).toHaveCount(1);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.season-canvas')).toHaveCount(0);
+});
+
 test('season layer remains visible in the background without painting over river, album, tone or group photographs', async ({ page }) => {
   test.setTimeout(60000);
   await page.addInitScript(() => {
@@ -320,6 +342,17 @@ test('river recycles a bounded preview pool through the collection and pauses fo
   expect(cadence.highRefreshUpdates).toBeLessThanOrEqual(62);
   expect(cadence.highRefreshDistance).toBeGreaterThan(page.viewportSize().width < 760 ? 21 : 32);
   expect(cadence.highRefreshDistance).toBeLessThan(page.viewportSize().width < 760 ? 25 : 36);
+  const hover = await page.evaluate(async () => {
+    const columns = [...document.querySelectorAll('.river-column')];
+    columns[0].dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    const before = columns.map(column => column.style.transform);
+    await window.__riverAdvance(800);
+    const after = columns.map(column => column.style.transform);
+    columns[0].dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    return { before, after };
+  });
+  expect(hover.after[0]).toBe(hover.before[0]);
+  expect(hover.after.slice(1).every((position, index) => position !== hover.before[index + 1])).toBe(true);
   await page.evaluate(() => window.__riverAdvance(90000));
   expect(await page.evaluate(() => window.__riverSeen.size)).toBe(31);
   expect(await page.locator('.river-tile').evaluateAll(tiles => new Set(tiles.map(tile => tile.dataset.key)).size)).toBe(await page.locator('.river-tile').count());
@@ -338,6 +371,31 @@ test('river recycles a bounded preview pool through the collection and pauses fo
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'false');
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.locator('.river-tile').first().evaluate(tile => { tile.focus({ preventScroll: true }); tile.click(); });
+  await expect(page.locator('#lightbox')).toBeVisible();
+  await page.locator('#lbClose').click();
+  await expect(page.locator('#lightbox')).toBeHidden();
+  await page.mouse.move(2, 12); // Move off the restored wall: its hovered column should still pause normally.
+  await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'true');
+  const resumed = await page.evaluate(async () => {
+    const columns = [...document.querySelectorAll('.river-column')];
+    const before = columns.map(column => column.style.transform);
+    await window.__riverAdvance(800);
+    return columns.every((column, index) => column.style.transform !== before[index]);
+  });
+  expect(resumed).toBe(true);
+  const keyboard = await page.evaluate(async () => {
+    const columns = [...document.querySelectorAll('.river-column')];
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    columns[0].querySelector('button').focus({ preventScroll: true });
+    const before = columns.map(column => column.style.transform);
+    await window.__riverAdvance(800);
+    const after = columns.map(column => column.style.transform);
+    document.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse' }));
+    return { before, after };
+  });
+  expect(keyboard.after[0]).toBe(keyboard.before[0]);
+  expect(keyboard.after.slice(1).every((position,index) => position !== keyboard.before[index+1])).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('#photoRiver')).toHaveAttribute('data-running', 'false');
   await expect(page.locator('#riverMotion')).toBeDisabled();

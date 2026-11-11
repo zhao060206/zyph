@@ -49,6 +49,17 @@ test('snow accumulates and expires, while sunlight dust never creates a solid pi
   }
 });
 
+test('winter mixes a bounded minority of larger crystals with ordinary snow grains', () => {
+  for (const width of [390,1440]) {
+    const scene = createSeasonScene('winter',width,1000,()=>.5);
+    const crystals = scene.particles.filter(particle => particle.sprite >= 3);
+    assert.ok(crystals.length / scene.particles.length >= .18 && crystals.length / scene.particles.length <= .22);
+    assert.ok(crystals.some(particle => particle.sprite === 3) && crystals.some(particle => particle.sprite === 4));
+    assert.ok(crystals[0].size > scene.particles[1].size);
+    assert.equal(scene.particles.length,seasonBudget('winter',width).count);
+  }
+});
+
 test('landing meets the existing pile and inherits the airborne pose before settling', () => {
   const scene = createSeasonScene('autumn', 1000, 700, () => .5);
   scene.particles = [scene.particles[0]];

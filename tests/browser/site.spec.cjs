@@ -49,6 +49,7 @@ test('gallery, search, year filter, empty album and themes work without script e
   await page.locator('#archiveSearch').fill('');
   await page.locator('#yearFilter').selectOption('2024');
   await expect(page.locator('.album-card')).toHaveCount(1);
+  await expect(page.locator('.album-cover')).toHaveAttribute('data-day', '2024-02-03');
   await page.locator('.album-cover').click();
   await expect(page.locator('#gpBlank')).toBeVisible();
   await page.locator('#gpBack').click();
