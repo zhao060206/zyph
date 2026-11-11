@@ -21,9 +21,9 @@ for (const mode of [
   });
   await page.goto('http://127.0.0.1:3010/', { waitUntil: 'domcontentloaded' });
   await page.locator('.album-card').first().waitFor();
-  const heroReadyMs = await page.locator('#heroImage').evaluate(async img => { await img.decode().catch(() => {}); return performance.now(); });
+  const heroReadyMs = await page.locator('.river-tile img').first().evaluate(async img => { await img.decode().catch(() => {}); return performance.now(); });
   await page.waitForFunction(() => document.documentElement.dataset.motionReason !== 'sampling-pending');
-  await page.locator('#heroImage').evaluate(async img => {
+  await page.locator('.river-tile img').first().evaluate(async img => {
     if (img.getAnimations) await Promise.allSettled(img.getAnimations().map(animation => animation.finished));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });

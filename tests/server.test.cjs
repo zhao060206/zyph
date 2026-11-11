@@ -264,4 +264,11 @@ test('HTML and assets support compression, conditional caching and HEAD', async 
   assert.equal((await raw('/', { 'Accept-Encoding': 'br;q=0,gzip;q=0' })).headers['content-encoding'], undefined);
   assert.equal((await raw('/assets/app.js', {}, 'HEAD')).body.length, 0);
   assert.equal((await raw('/assets/site.css')).status, 200);
+  const tones = await raw('/assets/tone-index.json', { 'Accept-Encoding': 'br' });
+  assert.equal(tones.status, 200);
+  assert.match(tones.headers['content-type'], /application\/json/);
+  const toneData = JSON.parse(zlib.brotliDecompressSync(tones.body));
+  assert.equal(toneData.version, 1);
+  assert.ok(Object.keys(toneData.photos).length > 0);
+  assert.equal((await raw('/assets/tone-index.json', { 'If-None-Match': tones.headers.etag, 'Accept-Encoding': 'br' })).status, 304);
 });

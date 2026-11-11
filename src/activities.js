@@ -33,12 +33,12 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
           this.refresh(); Vote.fetchStatus(); Submission.fetchStatus();
         }, Math.min(2147483647, Math.max(500, Math.min(...deadlines) - Date.now() + 100)));
         $('#publicActivities').innerHTML = live.length ? live.map(item => `
-          <article class="event-card"><span class="event-type">${typeLabel(item.type)} / OPEN NOW</span>
+          <article class="event-card"><span class="event-type">${typeLabel(item.type)}</span>
           <h3>${esc(item.config.title)}</h3>
           ${item.config.reward ? `<p class="event-time">参与纪念：${esc(item.config.reward)}</p>` : ''}
-          <p class="event-time">${item.config.deadline ? '截止：' + esc(displayTime(item.config.deadline)) + '（北京时间）' : '开放参与 · 由站长公布结束时间'}</p>
-          <button type="button" data-open-event="${item.type}">${item.type === 'voting' ? '去挑选心动作品' : '投递我的摄影作品'} <span aria-hidden="true">↗</span></button></article>`).join('') :
-          '<p class="empty">目前没有进行中的活动。新的摄影邀约会在这里发布。</p>';
+          <p class="event-time">${item.config.deadline ? '截止：' + esc(displayTime(item.config.deadline)) + '（北京时间）' : '进行中'}</p>
+          <button type="button" data-open-event="${item.type}">${item.type === 'voting' ? '去投票' : '投递作品'} <span aria-hidden="true">↗</span></button></article>`).join('') :
+          '<p class="empty">暂无活动</p>';
         $('#pastActivities').hidden = !data.history.length;
         $('#pastActivitiesList').innerHTML = data.history.map(item => `
           <div class="history-summary"><strong>${esc(item.config.title)}</strong><span>${typeLabel(item.type)} · ${item.participants} 人参与 · ${item.count} ${item.type === 'voting' ? '票' : '张照片'} · ${esc(displayTime(item.config.endedAt))} 结束</span></div>`).join('');

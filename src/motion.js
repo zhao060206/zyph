@@ -5,10 +5,13 @@ export function createMotionController() {
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const pointer = matchMedia('(hover:hover) and (pointer:fine)');
-  let tier = 'lite', started = false, testing = false, locked = false;
+  let tier = 'lite', started = false, testing = false;
+  let navigation = null, navigationId = 0;
+  const presences = new Map();
+  const ease = 'cubic-bezier(.22,1,.36,1)';
   let revealObserver = null, heroObserver = null, taskObserver = null;
   let raf = 0, previousFrame = 0, slowFrames = 0, sampledFrames = 0, monitorUntil = 0;
-  let pointerX = 0, pointerY = 0, heroVisible = true, heroHeight = 0;
+  let heroVisible = true, heroHeight = 0;
   const revealTargets = new Set();
 
   function restriction() {
@@ -39,18 +42,22 @@ export function createMotionController() {
   }
   function setTier(value, reason, save = true) {
     tier = value; root.dataset.motion = value; root.dataset.motionReason = reason;
+    document.dispatchEvent(new CustomEvent('motion:change', { detail: { tier: value } }));
     if (save) cache(value);
     if (value === 'full') observe();
     else {
+      navigation?.skipTransition();
+      for (const [element, state] of presences) {
+        presences.delete(element);
+        state.animation.cancel();
+        state.done?.();
+      }
       if (raf) cancelAnimationFrame(raf); raf = 0;
       previousFrame = sampledFrames = slowFrames = monitorUntil = 0;
       if (revealObserver) revealObserver.disconnect(); revealObserver = null;
       revealTargets.clear();
       if (taskObserver) taskObserver.disconnect(); taskObserver = null;
-      root.style.setProperty('--hero-x', '0px'); root.style.setProperty('--hero-y', '0px');
-      document.querySelectorAll('.hero-image').forEach(image => {
-        if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
-      });
+
     }
   }
   const limits = restriction();
@@ -98,7 +105,7 @@ export function createMotionController() {
   function renderFrame(time) {
     raf = 0;
     const header = document.querySelector('.topbar');
-    if (header) header.classList.toggle('is-scrolled', window.scrollY > Math.max(80, heroHeight - 80));
+    if (header) header.classList.toggle('is-scrolled', window.scrollY >= Math.max(80, heroHeight - header.offsetHeight));
     if (tier !== 'full' || !heroVisible || document.hidden || document.getElementById('archive').hidden) { previousFrame = 0; return; }
     // Sample consecutive frames during interaction, never the gaps between input events.
     const interval = time - previousFrame;
@@ -110,8 +117,6 @@ export function createMotionController() {
       }
     }
     previousFrame = time;
-    root.style.setProperty('--hero-x', `${pointerX.toFixed(2)}px`);
-    root.style.setProperty('--hero-y', `${Math.min(50, window.scrollY * .10) + pointerY}px`);
     if (time < monitorUntil) raf = requestAnimationFrame(renderFrame);
     else previousFrame = 0;
   }
@@ -120,24 +125,57 @@ export function createMotionController() {
     if (!raf) raf = requestAnimationFrame(renderFrame);
   }
 
+  function presence(element, closing = false, done) {
+    const prior = presences.get(element);
+    if (closing && prior?.closing) return;
+    const opacity = prior ? getComputedStyle(element).opacity : null;
+    if (prior) {
+      presences.delete(element);
+      prior.animation.cancel();
+    }
+    if (tier !== 'full' || reduced.matches || !element.animate) { done?.(); return; }
+    const animation = element.animate([
+      { opacity: opacity ?? (closing ? 1 : 0) }, { opacity: closing ? 0 : 1 },
+    ], { duration: closing ? 200 : 260, easing: ease, fill: 'both' });
+    if (!animation.finished) { animation.cancel(); done?.(); return; }
+    const state = { animation, closing, done };
+    presences.set(element, state);
+    const finish = () => {
+      if (presences.get(element) !== state) return;
+      presences.delete(element);
+      done?.();
+      animation.cancel();
+    };
+    animation.finished.then(finish, finish);
+  }
+
   return {
     observe,
     get tier() { return tier; },
-    enterImage(image) {
-      if (tier !== 'full' || reduced.matches || !image.animate || document.hidden) return;
-      if (image.getAnimations) image.getAnimations().forEach(animation => animation.cancel());
-      image.animate([{ opacity: .55, transform: 'scale(1.08)' }, { opacity: 1, transform: getComputedStyle(image).transform }], {
-        duration: 1200, easing: 'cubic-bezier(.16,1,.3,1)',
-      });
-    },
-    transition(update) {
-      if (tier !== 'full' || reduced.matches || !document.startViewTransition || locked) { update(); return; }
-      locked = true;
-      let applied = false;
-      try {
-        const transition = document.startViewTransition(() => { applied = true; update(); });
-        transition.finished.then(() => { locked = false; }, () => { locked = false; });
-      } catch (error) { locked = false; if (!applied) update(); }
+    downgrade(reason = 'season-pressure') { setTier('lite', reason); },
+    present(element) { navigation?.skipTransition(); presence(element); },
+    dismiss(element, done) { presence(element, true, done); },
+    transition(update, { back = false } = {}) {
+      const id = ++navigationId;
+      navigation?.skipTransition(); navigation = null;
+      if (tier !== 'full' || reduced.matches) { update(); delete root.dataset.navigation; return; }
+      root.dataset.navigation = back ? 'back' : 'forward';
+      const cleanup = () => { if (id === navigationId) { navigation = null; delete root.dataset.navigation; } };
+      if (!document.startViewTransition) {
+        update();
+        const page = document.querySelector('#groupPage:not([hidden]),#archive:not([hidden])');
+        if (!page?.animate) { cleanup(); return; }
+        const animation = page.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: ease });
+        // The same cancellation path handles fallback animation and native snapshots.
+        navigation = { skipTransition: () => animation.cancel() };
+        animation.finished.then(cleanup, cleanup);
+        return;
+      }
+      const transition = document.startViewTransition(() => { if (id === navigationId) update(); });
+      navigation = transition;
+      transition.ready.catch(() => {}); // Skipping an interrupted snapshot rejects ready by design.
+      transition.updateCallbackDone.catch(error => console.error('Page navigation failed', error));
+      transition.finished.then(cleanup, cleanup);
     },
     start() {
       if (started) return; started = true;
@@ -156,11 +194,8 @@ export function createMotionController() {
       if (hero) {
         hero.addEventListener('pointermove', event => {
           if (tier !== 'full' || !pointer.matches || event.pointerType === 'touch') return;
-          pointerX = (event.clientX / innerWidth - .5) * -12;
-          pointerY = (event.clientY / Math.max(heroHeight, 1) - .5) * -8;
           scheduleFrame(true);
         }, { passive: true });
-        hero.addEventListener('pointerleave', () => { pointerX = pointerY = 0; scheduleFrame(); });
       }
       const preferenceChanged = () => {
         const limit = restriction();

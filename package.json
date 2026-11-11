@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/server.test.cjs",
+    "test": "node --test tests/server.test.cjs tests/tones.test.mjs tests/season-scene.test.mjs tests/photo-river.test.mjs",
+    "analyze:tones": "node scripts/analyze-tones.mjs",
+    "classify:tones": "node scripts/classify-tones-ai.mjs",
     "test:browser": "playwright test",
     "check": "node --check server.js && npm run build && npm test"
   },

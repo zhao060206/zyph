@@ -2,6 +2,9 @@ import { createArchive } from './gallery.js';
 import { createEventCenter } from './activities.js';
 import { setupDialogs } from './dialogs.js';
 import { createMotionController } from './motion.js';
+import { createSeasons } from './seasons.js';
+import { TONES, resolveTone } from './tones.mjs';
+import { analyzeBlob } from './color-analysis.js';
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s);
@@ -146,7 +149,6 @@ const DEMO_GROUPS=[
 
 /* ─── 云端配置:腾讯云 COS(图片 + 组数据) ─── */
 const CONFIG={
-  featuredPhoto:'photos/2026-10-25/13_1792931647538.jpg',
   cosBucket:'zhao-1465501838',  /* 存储桶名(控制台可复制) */
   cosRegion:'ap-nanjing',       /* 存储桶所在地域 */
   apiBase:''                    /* 互动接口地址:同源部署留空即可(走相对路径 /api/…);前后端分域时填后端完整域名 */
@@ -546,7 +548,7 @@ const Social={
     if(sig===this._talkSig)return;
     this._talkSig=sig;
     this.paintComments(key,rec.comments,{list:'#gtList',count:'#gtCount',
-      empty:'还没有人在这里留言。<br>来说说你对这一组的感受吧。'});
+      empty:'暂无留言'});
     /* 组留言区也显示当前身份(名字+头像),与照片评论区同一套来源 */
     const av=$('#gtMeAv'),nm=$('#gtMeName');
     if(av)av.innerHTML=Avatar.svg(Identity.avatar,26);
@@ -574,7 +576,7 @@ const Social={
     /* dataset.key 让删除按钮知道这条评论挂在哪(照片 key 还是组 key) */
     box.dataset.key=key;
     if(!comments||!comments.length){
-      box.innerHTML=`<div class="cm-empty">${o.empty||'还没有人留言。<br>来说说你对这张照片的感受吧。'}</div>`;
+      box.innerHTML=`<div class="cm-empty">${o.empty||'暂无留言'}</div>`;
       return;
     }
     box.innerHTML=comments.slice().reverse().map(c=>{
@@ -954,7 +956,7 @@ const Vote={
     $('#vmNoticeRules').textContent=this.config.rules||(max>1?`每位访客最多可挑选 ${max} 张心动的作品。请在投票时附上联系 QQ，活动截止后站长将联系得票最高作品的投票者赠送精美纪念礼！`:'每位访客限投一张你最心动的照片。请在投票时附上你的真实联系 QQ，活动截止后站长将联系得票最高作品的投票者赠送精美摄影纪念画册！');
     const rw=$('#vmNoticeReward');
     if(rw){
-      rw.textContent=this.config.reward?('🎁 获胜福利: '+this.config.reward):'';
+      rw.textContent=this.config.reward?('参与纪念：'+this.config.reward):'';
       rw.hidden=!this.config.reward;
     }
     const subBtn=$('#vmNoticeSub');
@@ -982,7 +984,7 @@ const Vote={
     const max=this.getMaxVotes();
     $('#vbTitle').textContent=this.config.title||'摄影作品评选';
     const tag=$('.vb-tag');
-    if(tag)tag.textContent=max>1?`✦ EXHIBITION BALLOT · 每人最多可投 ${max} 张`:'✦ EXHIBITION BALLOT · 每人限投 1 票';
+    if(tag)tag.textContent=max>1?`每人最多 ${max} 票`:'每人限投 1 票';
     const sub=$('#vbSub');
     if(sub)sub.textContent=`每人每期一次，可选 1~${max} 张作品`;
     $('#vbRules').textContent=(this.config.rules||'')+(this.config.reward?'\n\n参与纪念：'+this.config.reward:'')+(this.config.deadline?'\n\n截止时间：'+this.config.deadline+'（北京时间）':'');
@@ -1235,7 +1237,7 @@ const Submission={
     document.body.style.overflow='hidden';
     const max=this.getMaxPhotos();
     $('#sbTitle').textContent=this.config.title||'摄影作品征集';
-    const tag=$('#sbTag');if(tag)tag.textContent=`✦ PHOTO CALL FOR ENTRIES · 欢迎投递 1~${max} 张作品`;
+    const tag=$('#sbTag');if(tag)tag.textContent=`最多 ${max} 张`;
     const sub=$('#sbSub');if(sub)sub.textContent=`选择 1~${max} 张原创摄影作品`;
     $('#sbRules').textContent=(this.config.rules||'')+(this.config.reward?'\n\n参与纪念：'+this.config.reward:'')+(this.config.deadline?'\n\n截止时间：'+this.config.deadline+'（北京时间）':'');
     this.renderCards();
@@ -1446,8 +1448,8 @@ const Submission={
 };
 
 /* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
-const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,featuredPhoto:CONFIG.featuredPhoto,Motion,
-  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close()),openAdmin:()=>Admin.open()});
+const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,Motion,storageGet,storageSet,
+  openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close(),{back:true}),openAdmin:()=>Admin.open()});
 
 /* ─── 组详情子页面 ─── */
 const GroupPage={
@@ -1456,7 +1458,7 @@ const GroupPage={
     this.el=$('#groupPage');
     this.previews=$('#gpPreviews');
     this.blank=$('#gpBlank');
-    $('#gpBack').addEventListener('click',()=>Motion.transition(()=>this.close()));
+    $('#gpBack').addEventListener('click',()=>Motion.transition(()=>this.close(),{back:true}));
     /* 预览图点击 → 打开悬浮窗 */
     this.previews.addEventListener('click',e=>{
       const item=e.target.closest('.gp-preview-item');
@@ -1511,7 +1513,6 @@ const GroupPage={
           ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
         </div>
       </figure>`).join('');
-    if(this.g.d===$('#heroFeature').dataset.day&&$('#heroFeature').dataset.shared==='true'){const cover=this.previews.querySelector('img');if(cover)cover.style.viewTransitionName='featured-photo'}
     Motion.observe(this.previews);
     /* 图片懒加载动画 */
     this.previews.querySelectorAll('img').forEach(img=>{
@@ -1788,8 +1789,13 @@ const Lightbox={
     this.el.hidden=false;
     this.el.classList.add('open');
     document.body.style.overflow='hidden';
+    Motion.present(this.el);
   },
   close(){
+    if(this.el.hidden)return;
+    Motion.dismiss(this.el,()=>this.finishClose());
+  },
+  finishClose(){
     this.el.classList.remove('open');
     this.el.hidden=true;
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
@@ -2052,6 +2058,10 @@ const Admin={
       }
     });
     mg.addEventListener('change',ev=>{
+      if(ev.target.classList.contains('mg-tone')){
+        const row=ev.target.closest('.mg-ph');
+        this.mgToneSave(row.dataset.d,+row.dataset.i,ev.target.value);return;
+      }
       if(!ev.target.classList.contains('mg-file'))return;
       const ph=ev.target.closest('.mg-ph');
       const f=ev.target.files&&ev.target.files[0];
@@ -2496,6 +2506,7 @@ const Admin={
               <span class="mg-t">${esc(p.t||'')}</span>
               <span class="mg-exif" title="${esc(ex)}">${esc(ex)||'无参数'}</span>
             </div>
+            <label class="mg-tone-label">主要色调 <select class="mg-tone" aria-label="${esc(p.t||'作品')} 主要色调"><option value="auto">自动识别</option>${TONES.map(tone=>`<option value="${tone.id}"${p.tone?.manual&&p.tone.group===tone.id?' selected':''}>${tone.label}</option>`).join('')}</select><span>${TONES.find(tone=>tone.id===resolveTone(p,Archive.toneIndex)?.group)?.label||'待归类'}</span></label>
             <textarea class="mg-desc" rows="2" maxlength="180" placeholder="给这张照片写句介绍(可选) · 显示在悬浮窗,失焦自动保存">${esc(p.d||'')}</textarea>
             <div class="mg-acts">
               <label class="mg-btn" title="上传新照片文件替换这一张(会重新识别参数)">替换照片<input type="file" accept="image/*" class="mg-file" hidden></label>
@@ -2746,10 +2757,12 @@ const Admin={
       const oldTn=g.gs[i].tn;
       g.gs[i].k=key;
       delete g.gs[i].tn;   /* 换了新图,旧小图作废 */
+      delete g.gs[i].tone;
       if(ex&&ex[0])g.gs[i].exif=ex[0];
       /* 为新图生成小版本(与上传流程一致,否则这张会回退到加载原图) */
       try{
         const small=await Thumb.make(file,Thumb.SMALL,Thumb.Q_SMALL);
+        g.gs[i].tone=await analyzeBlob(small);
         const sk=Thumb.key(key,Thumb.SMALL);
         await this.put(sk,small);
         const view=await Thumb.make(file,Thumb.VIEW,Thumb.Q_VIEW);
@@ -2784,6 +2797,27 @@ const Admin={
       g.gs[i].d=previous;
       this.status('保存介绍失败:'+(err&&err.message?err.message:''),'no');
     }
+  },
+  async mgToneSave(day,index,group){
+    const photo=this.mgData?.groups.find(item=>item.d===day)?.gs[index];
+    if(!photo||this._mediaBusy)return;
+    this._mediaBusy=true;
+    const previous=photo.tone;
+    try{
+      if(group==='auto'){
+        if(!photo.tn?.s)throw new Error('请先生成这张作品的预览图');
+        const response=await fetchWithTimeout(cosURL(photo.tn.s));
+        if(!response.ok)throw new Error('缩略图读取失败');
+        photo.tone=await analyzeBlob(await response.blob());
+      }else{
+        if(!TONES.some(tone=>tone.id===group))throw new Error('色调无效');
+        photo.tone={version:1,group,palette:resolveTone(photo,Archive.toneIndex)?.palette||[TONES.find(tone=>tone.id===group).color],manual:true};
+      }
+      await this.mgSave('作品色调已保存');
+    }catch(error){
+      if(previous)photo.tone=previous;else delete photo.tone;
+      this.renderManage();this.status('色调保存失败：'+error.message,'no');
+    }finally{this._mediaBusy=false}
   },
   /* 整组介绍:写给"这一组"的文字,空分组也适用(与单张介绍分开保存) */
   async mgGroupDescSave(d,val){
@@ -2832,15 +2866,16 @@ const Admin={
         if(f)src=await this.readFileText(f);
       }
       if(!src){this.status('未能取得页面源码:请点上方选择文件,选定 index.html 后再发布','no');return}
-      const [appResponse,cssResponse]=await Promise.all([fetchWithTimeout('/assets/app.js'),fetchWithTimeout('/assets/site.css')]);
-      if(!appResponse.ok||!cssResponse.ok)throw new Error('页面资源读取失败，未写入不完整备份');
-      const [appSource,cssSource]=await Promise.all([appResponse.text(),cssResponse.text()]);
+      const assets = ['assets/app.js','assets/site.css','assets/tone-index.json',
+        ...['spring','autumn'].flatMap(kind => [0,1,2].map(index => `assets/season/${kind}-${index}.webp`)), 'assets/season/ATTRIBUTION.md'];
+      const responses = await Promise.all(assets.map(asset => fetchWithTimeout('/'+asset)));
+      if(responses.some(response => !response.ok))throw new Error('页面资源读取失败，未写入不完整备份');
+      const blobs = await Promise.all(responses.map(response => response.blob()));
       this.status('正在备份页面与浏览资源…');
-      await this.put('assets/app.js',new Blob([appSource],{type:'text/javascript'}));
-      await this.put('assets/site.css',new Blob([cssSource],{type:'text/css'}));
+      for(let index=0;index<assets.length;index++)await this.put(assets[index],blobs[index]);
       await this.put('index.html',new Blob([src],{type:'text/html; charset=utf-8'}));
-      this.status('页面和两份资源已备份','ok');
-      out.hidden=false;out.textContent='已备份 index.html、assets/app.js 和 assets/site.css。正式网站版本仍由 GitHub 中的代码和部署平台管理。';
+      this.status('页面与浏览资源已备份','ok');
+      out.hidden=false;out.textContent='已备份 index.html、脚本、样式、色调索引与季节素材。正式网站版本仍由 GitHub 中的代码和部署平台管理。';
 
     }catch(err){
       this.status('发布失败:'+(err&&err.message?err.message:'请检查密钥与存储桶权限'),'no');
@@ -2952,6 +2987,7 @@ const Admin={
           this.prog(Math.round((i+0.5)/files.length*90),`生成预览图 ${i+1}/${files.length} …`);
           try{
             const small=await Thumb.make(f,Thumb.SMALL,Thumb.Q_SMALL);
+            ph.tone=await analyzeBlob(small);
             const smallKey=Thumb.key(key,Thumb.SMALL);
             await this.put(smallKey,small);
             const view=await Thumb.make(f,Thumb.VIEW,Thumb.Q_VIEW);
@@ -3050,6 +3086,7 @@ Vote.init();     /* 投票活动生命周期管理与弹窗入口 */
 Submission.init();
 EventCenter.init();
 Motion.start();
+createSeasons({Motion,storageGet,storageSet}).start();
 
 (function(){
   const root=document.documentElement,btn=$('#themeBtn');
