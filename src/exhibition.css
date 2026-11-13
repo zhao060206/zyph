@@ -1,5 +1,5 @@
 /* Phototropic: curatorial monograph, natural aspect ratios, quiet controls. */
-.topbar{position:fixed;inset:0 0 auto;height:68px;padding:0 4vw;display:flex;align-items:center;gap:24px;background:transparent;color:var(--text);z-index:800;border-bottom:1px solid transparent}
+.topbar{position:fixed;inset:0 0 auto;height:68px;padding:0 4vw;display:flex;align-items:center;gap:24px;background:var(--bg);color:var(--text);z-index:800;border-bottom:1px solid transparent}
 .brand{display:inline-flex;align-items:center;gap:8px;font:500 18px/1 var(--sans);letter-spacing:-.01em;padding:10px 0;color:inherit;white-space:nowrap}
 .brand::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--season-ink);flex-shrink:0}
 .main-nav{display:inline-flex;align-items:center;gap:22px;margin-left:auto}
