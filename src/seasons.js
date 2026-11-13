@@ -51,7 +51,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
         drawing.stroke();
       };
       drawing.lineCap = drawing.lineJoin = 'round';
-      drawing.strokeStyle = 'rgba(91,129,164,.75)'; drawing.lineWidth = 4.5; crystal();
+      drawing.strokeStyle = 'rgba(72,110,148,.78)'; drawing.lineWidth = 4.8; crystal();
       drawing.strokeStyle = '#f8fcff'; drawing.lineWidth = 2.6; crystal();
       return sprite;
     }
@@ -63,10 +63,10 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     drawing.translate(32,32); drawing.scale(1,.83 + index*.07);
     const gradient = drawing.createLinearGradient(-radius, -radius, radius, radius);
     gradient.addColorStop(0, 'rgba(255,255,255,.98)');
-    gradient.addColorStop(.6, 'rgba(245,250,255,.94)');
-    gradient.addColorStop(1, 'rgba(198,221,239,.65)');
+    gradient.addColorStop(.6, 'rgba(235,245,254,.94)');
+    gradient.addColorStop(1, 'rgba(176,207,235,.74)');
     drawing.fillStyle = gradient;
-    drawing.shadowColor = 'rgba(219,235,248,.5)'; drawing.shadowBlur = 2 + index;
+    drawing.shadowColor = 'rgba(98,136,174,.35)'; drawing.shadowBlur = 2.5 + index;
     drawing.beginPath();
     for (let point = 0; point < 16; point++) {
       const angle = point / 16 * Math.PI * 2;
@@ -75,6 +75,8 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       if (point) drawing.lineTo(x,y); else drawing.moveTo(x,y);
     }
     drawing.closePath(); drawing.fill();
+    drawing.shadowBlur = 0;
+    drawing.strokeStyle = 'rgba(104,142,180,.24)'; drawing.lineWidth = 1.3; drawing.stroke();
     return sprite;
   }
 
@@ -178,7 +180,10 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       lastPaint = time; elapsed += delta;
       context.clearRect(0, 0, width, height);
       const kind = root.dataset.season;
-      stepSeasonScene(scene, delta, elapsed, quality);
+      const heroEl = document.querySelector('.exhibition-hero');
+      const groupEl = document.getElementById('groupPage');
+      const edgeOnly = (groupEl && !groupEl.hidden) || window.scrollY > Math.max(220, (heroEl?.offsetHeight || 560) * .48);
+      stepSeasonScene(scene, delta, elapsed, quality, edgeOnly);
       context.save();
       context.beginPath();
       context.rect(0, topbarHeight, width, height - topbarHeight);
@@ -191,10 +196,18 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
           context.restore();
         }
       }
+      const safeEdge = Math.max(10, Math.min(28, width * .022)) + Math.max(0, (width - 1560) * .5);
+      const mobileFactor = width < 760 ? .5 : 1;
       for (let index = 0; index < Math.floor(scene.particles.length * quality); index++) {
         const particle = scene.particles[index];
+        let alpha = particle.alpha * (edgeOnly ? mobileFactor : 1);
+        if (edgeOnly && particle.x > safeEdge && particle.x < width - safeEdge) {
+          const dist = Math.min(particle.x - safeEdge, width - safeEdge - particle.x);
+          if (dist > 14) continue;
+          alpha *= Math.max(0, 1 - dist / 14);
+        }
         const pose = particlePose(particle, elapsed);
-        paintParticle(particle, particle.x, particle.y, pose.rotation, particle.alpha, pose.flatten);
+        paintParticle(particle, particle.x, particle.y, pose.rotation, alpha, pose.flatten);
       }
       context.restore();
       for (const deposit of scene.deposits) {

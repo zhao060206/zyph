@@ -1506,18 +1506,25 @@ const GroupPage={
     /* 预览图网格:每张图片正下方带各自的相机参数(机身型号 + 参数),单张无则回退整组默认 */
     this.previews.innerHTML=g.gs.map((p,i)=>`
       <figure class="gp-preview-item" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
-        <span class="gp-num">${String(i+1).padStart(2,'0')}</span>
         <div class="gp-thumb"><img src="${safeUrl(pURL(p,500))}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
         <div class="gp-card-foot">
-          <div class="gp-card-title-row"><span class="gp-card-title">${esc(p.t)}</span><span class="gp-card-arrow" aria-hidden="true">↗</span></div>
+          <div class="gp-card-title-row"><span class="gp-num-inline">${String(i+1).padStart(2,'0')}</span><span class="gp-card-title">${esc(p.t)}</span><span class="gp-card-arrow" aria-hidden="true">↗</span></div>
           ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
         </div>
       </figure>`).join('');
     Motion.observe(this.previews);
     /* 图片懒加载动画 */
     this.previews.querySelectorAll('img').forEach(img=>{
-      img.addEventListener('load',()=>img.classList.add('loaded'),{once:true});
-      if(img.complete&&img.naturalWidth)img.classList.add('loaded');
+      const fit=()=>{
+        img.classList.add('loaded');
+        const box=img.closest('.gp-thumb');
+        if(box&&img.naturalWidth&&img.naturalHeight){
+          const ratio=Math.max(.72,Math.min(1.65,img.naturalWidth/img.naturalHeight));
+          box.style.aspectRatio=ratio.toFixed(3);
+        }
+      };
+      img.addEventListener('load',fit,{once:true});
+      if(img.complete&&img.naturalWidth)fit();
     });
     /* 绑定预览图点击 */
     this.previews.querySelectorAll('.gp-preview-item').forEach((item,i)=>{
@@ -3095,7 +3102,7 @@ createSeasons({Motion,storageGet,storageSet}).start();
     btn.setAttribute('aria-checked',String(theme==='bright'));
     btn.setAttribute('aria-label',theme==='bright'?'切换到深色主题':'切换到浅色主题');
     const meta=document.querySelector('meta[name="theme-color"]');
-    if(meta)meta.content=theme==='bright'?'#f7f6f2':'#09090b';
+    if(meta){const bg=getComputedStyle(root).getPropertyValue('--bg').trim();meta.content=bg||(theme==='bright'?'#f7f5f4':'#0e131a');}
   };
   apply(storageGet('pt_theme','bright')==='dark'?'dark':'bright');
   btn.addEventListener('click',()=>{const theme=root.getAttribute('data-theme')==='bright'?'dark':'bright';apply(theme);storageSet('pt_theme',theme)});

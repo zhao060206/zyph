@@ -1,7 +1,7 @@
 export function seasonBudget(kind, width) {
   const mobile = width < 760;
   return {
-    count: kind === 'summer' ? mobile ? 12 : 18 : kind === 'winter' ? mobile ? 30 : 54 : mobile ? 24 : 42,
+    count: kind === 'summer' ? mobile ? 12 : 18 : kind === 'winter' ? mobile ? 30 : 54 : kind === 'autumn' ? mobile ? 18 : 30 : mobile ? 24 : 42,
     pileLimit: mobile ? 48 : 96,
     minSize: kind === 'summer' ? 2 : kind === 'winter' ? mobile ? 10 : 12 : kind === 'autumn' ? mobile ? 24 : 30 : mobile ? 20 : 26,
     maxSize: kind === 'summer' ? 5 : kind === 'winter' ? mobile ? 22 : 28 : kind === 'autumn' ? mobile ? 46 : 58 : mobile ? 38 : 48,
@@ -48,10 +48,15 @@ export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = fals
   }
   if (scene.deposits.length > pileLimit) scene.deposits.splice(0, scene.deposits.length - pileLimit);
   const count = Math.floor(scene.particles.length * quality);
+  const edge = Math.max(10, Math.min(28, scene.width * .022)) + Math.max(0, (scene.width - 1560) * .5);
   for (let index = 0; index < count; index++) {
     const particle = scene.particles[index];
     particle.y += particle.speed * delta;
-    particle.x += (Math.sin(time * .65 + particle.phase) * 17 + (scene.kind === 'autumn' ? 8 : 3)) * delta;
+    let drift = Math.sin(time * .65 + particle.phase) * 17 + (scene.kind === 'autumn' ? 8 : 3);
+    if (edgeOnly && particle.x > edge && particle.x < scene.width - edge) {
+      drift += (particle.x < scene.width * .5 ? -1 : 1) * 44;
+    }
+    particle.x += drift * delta;
     if (particle.x < -particle.size) particle.x = scene.width + particle.size;
     if (particle.x > scene.width + particle.size) particle.x = -particle.size;
     // Only particles close enough to touch the highest possible pile need collision work.
@@ -70,8 +75,8 @@ export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = fals
           alpha: particle.alpha, age: 0, hold: 6 + scene.random() * 4, fade: 18 + scene.random() * 10 });
       }
       particle.y = -particle.size;
-      const edge = Math.min(72, scene.width * .12);
-      particle.x = edgeOnly ? scene.random() < .5 ? scene.random() * edge : scene.width - scene.random() * edge : scene.random() * scene.width;
+      const spawnEdge = Math.max(8, Math.min(24, scene.width * .018)) + Math.max(0, (scene.width - 1560) * .5);
+      particle.x = edgeOnly ? scene.random() < .5 ? scene.random() * spawnEdge : scene.width - scene.random() * spawnEdge : scene.random() * scene.width;
     }
   }
 }

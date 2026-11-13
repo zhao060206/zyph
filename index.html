@@ -14,16 +14,40 @@
 <div class="season-controls"><label class="season-picker"><span class="sr-only">季节主题</span><select id="seasonSelect" aria-label="季节主题"><option value="auto">自动</option><option value="spring">春</option><option value="summer">夏</option><option value="autumn">秋</option><option value="winter">冬</option></select></label><button id="seasonEffects" type="button" aria-label="季节动效" aria-pressed="true" title="季节动效"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8m0-12.8-2.8 2.8m-7.2 7.2-2.8 2.8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
 <main id="archive">
 <section class="exhibition-hero" aria-labelledby="heroTitle">
-<div class="photo-river" id="photoRiver" role="group" aria-label="全体照片漫游"></div>
-<div class="hero-intro"><h1 id="heroTitle">Phototropic</h1><button id="heroExplore" class="hero-explore" type="button">浏览作品 <span aria-hidden="true">↓</span></button></div>
-<button id="riverMotion" class="river-motion" type="button" aria-label="照片流动效" aria-pressed="true" title="暂停照片流"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
-<div id="heroCounts" class="sr-only" role="status"></div>
+  <div class="hero-frame">
+    <div class="hero-intro">
+      <h1 id="heroTitle">Phototropic</h1>
+      <p class="hero-index" id="heroIndex" aria-hidden="true"></p>
+      <button id="heroExplore" class="hero-explore" type="button">浏览作品 <span class="hero-arrow" aria-hidden="true">↓</span></button>
+    </div>
+    <div class="hero-stage">
+      <div class="photo-river" id="photoRiver" role="group" aria-label="全体照片漫游"></div>
+      <button id="riverMotion" class="river-motion" type="button" aria-label="照片流动效" aria-pressed="true" title="暂停照片流"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    </div>
+  </div>
+  <div id="heroCounts" class="sr-only" role="status"></div>
 </section>
 <section id="gallery" class="gallery-section" aria-labelledby="galleryTitle">
-  <div class="section-heading"><div class="section-title-wrap"><h2 id="galleryTitle">作品</h2></div><div class="gallery-mode" id="galleryMode" role="group" aria-label="作品分类方式"><button type="button" data-gallery-mode="archive" aria-pressed="true">日期·地点</button><button type="button" data-gallery-mode="tone" aria-pressed="false">色调</button></div><div class="section-status"><p class="result-count" id="resultCount" role="status"></p><p id="archiveSource" class="muted" role="status">载入中…</p></div></div>
-  <div class="archive-toolbar"><div class="archive-filters"><label class="search-field" for="archiveSearch"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><input id="archiveSearch" type="search" placeholder="搜索" aria-label="搜索标题、地点或日期" autocomplete="off"></label><label class="year-select" for="yearFilter"><span class="sr-only">按年份筛选</span><select id="yearFilter"><option value="">全部年份</option></select></label></div><div class="archive-tools"><button class="tool-btn" id="collapseAll" type="button">收起印样</button><button class="tool-btn" id="expandAll" type="button">展开印样</button></div></div>
+  <div class="section-heading">
+    <div class="section-title-wrap">
+      <h2 id="galleryTitle">作品</h2>
+      <div class="gallery-mode" id="galleryMode" role="group" aria-label="作品分类方式"><button type="button" data-gallery-mode="archive" aria-pressed="true">日期·地点</button><button type="button" data-gallery-mode="tone" aria-pressed="false">色调</button></div>
+    </div>
+    <div class="section-status"><p class="result-count" id="resultCount" role="status"></p><p id="archiveSource" class="muted" role="status">载入中…</p></div>
+  </div>
+  <div class="archive-toolbar">
+    <div class="archive-filters">
+      <label class="search-field" for="archiveSearch"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><input id="archiveSearch" type="search" placeholder="搜索" aria-label="搜索标题、地点或日期" autocomplete="off"></label>
+      <label class="year-select" for="yearFilter"><span class="sr-only">按年份筛选</span><select id="yearFilter"><option value="">全部年份</option></select></label>
+    </div>
+    <div class="archive-tools"><button class="tool-btn" id="toggleAllSheets" type="button" aria-pressed="false">展开全部印样</button></div>
+  </div>
   <div id="toneFilters" class="tone-filters" role="group" aria-label="按主要色调筛选" hidden></div>
   <div id="years" class="album-grid" aria-live="polite"><p class="empty">归档正在载入…</p></div>
+  <section class="blank-chronicle" id="blankChronicle" aria-labelledby="blankChronicleTitle" hidden>
+    <h3 class="blank-chronicle-title" id="blankChronicleTitle">时光留白</h3>
+    <div class="blank-list" id="blankList"></div>
+  </section>
   <button id="toneMore" class="tone-more" type="button" hidden>继续浏览</button>
 </section>
 <section id="activities" class="activities-section" aria-labelledby="activitiesTitle"><div class="section-heading"><div class="section-title-wrap"><span class="section-eyebrow"></span><h2 id="activitiesTitle">活动</h2></div></div><div id="publicActivities" class="event-grid"><p class="empty">活动信息载入中…</p></div><div class="activity-badges" hidden><button id="topVoteBadge" hidden type="button">去投票</button><button id="topSubBadge" hidden type="button">投递作品</button></div><details id="pastActivities" class="past-activities" hidden><summary>往期活动</summary><div id="pastActivitiesList"></div></details></section>
