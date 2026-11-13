@@ -34,13 +34,18 @@ test.beforeEach(async ({ page }) => {
 test('gallery, search, year filter, empty album and themes work without script errors', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await expect(page.locator('.album-card')).toHaveCount(3);
+  await expect(page.locator('.album-card')).toHaveCount(2);
+  await expect(page.locator('.blank-entry')).toHaveCount(1);
   await expect(page.locator('.contact-sheet')).toHaveCount(0);
   await page.locator('[data-toggle-sheet="2026-10-25"]').click();
   await expect(page.locator('.contact-sheet')).toHaveCount(1);
   await expect(page.locator('[data-toggle-sheet="2026-10-25"]')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-toggle-sheet="2025-06-08"]')).toHaveAttribute('aria-expanded', 'false');
-  await page.locator('[data-toggle-sheet="2026-10-25"]').click();
+  await page.locator('#toggleAllSheets').click();
+  await expect(page.locator('.contact-sheet')).toHaveCount(0);
+  await page.locator('#toggleAllSheets').click();
+  await expect(page.locator('.contact-sheet')).toHaveCount(2);
+  await page.locator('#toggleAllSheets').click();
   await expect(page.locator('.contact-sheet')).toHaveCount(0);
   await expect(page.locator('#heroTitle')).toHaveText('Phototropic');
   await expect(page.locator('#voteNoticeModal')).toBeHidden();
@@ -48,9 +53,10 @@ test('gallery, search, year filter, empty album and themes work without script e
   await expect(page.locator('.album-card')).toHaveCount(1);
   await page.locator('#archiveSearch').fill('');
   await page.locator('#yearFilter').selectOption('2024');
-  await expect(page.locator('.album-card')).toHaveCount(1);
-  await expect(page.locator('.album-cover')).toHaveAttribute('data-day', '2024-02-03');
-  await page.locator('.album-cover').click();
+  await expect(page.locator('.album-card')).toHaveCount(0);
+  await expect(page.locator('.blank-entry')).toHaveCount(1);
+  await expect(page.locator('.blank-entry')).toHaveAttribute('data-day', '2024-02-03');
+  await page.locator('.blank-entry').click();
   await expect(page.locator('#gpBlank')).toBeVisible();
   await page.locator('#gpBack').click();
   await page.locator('#themeBtn').click();
@@ -84,7 +90,7 @@ test('photo viewer, likes, comments, deletion and keyboard focus work', async ({
 
 test('mobile layout has no overflow at small, portrait and landscape sizes', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.album-card')).toHaveCount(3);
+  await expect(page.locator('.album-card')).toHaveCount(2);
   for (const size of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 844, height: 390 }, { width: 768, height: 1024 }]) {
     await page.setViewportSize(size);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -173,7 +179,7 @@ test('blocked browser storage keeps the gallery usable and missing previews do n
   page.on('request', request => { if (request.url() === bucket + '/photos/one.jpg') originals.push(request.url()); });
   await page.route(bucket + '/photos/one-view.jpg', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/');
-  await expect(page.locator('.album-card')).toHaveCount(3);
+  await expect(page.locator('.album-card')).toHaveCount(2);
   await page.locator('.album-cover').first().click();
   await page.locator('.gp-preview-item').first().click();
   await expect(page.locator('#lightbox')).toBeVisible();

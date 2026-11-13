@@ -50,11 +50,11 @@ test('winter blue-gray background reveals a mixed snow field with grains and pre
   await page.goto('/');
   await page.locator('#seasonSelect').selectOption('winter');
   await expect(page.locator('html')).toHaveAttribute('data-season-effects', 'running');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(194, 206, 222)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(238, 242, 246)');
   await expect.poll(() => page.evaluate(() => [...window.__snowTextures].sort((a,b) => a-b))).toEqual([64,96]);
   expect(await page.locator('.season-canvas').evaluate(canvas => canvas.width * canvas.height)).toBeLessThanOrEqual(2000000);
   await page.locator('#themeBtn').click();
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(18, 27, 39)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(14, 19, 26)');
   await expect(page.locator('.season-canvas')).toHaveCount(1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('.season-canvas')).toHaveCount(0);

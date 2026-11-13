@@ -1,8 +1,8 @@
 html[data-motion=full] [data-reveal].motion-pending{opacity:0;transition:opacity .3s var(--ease);transition-delay:var(--reveal-delay,0ms)}
 html[data-motion=full] [data-reveal].is-revealed{opacity:1}
 html[data-motion=full] button,html[data-motion=full] a,html[data-motion=full] select{transition:color .16s var(--ease),background-color .16s var(--ease),border-color .16s var(--ease)}
-html[data-motion=full] .album-cover,html[data-motion=full] .tone-photo,html[data-motion=full] .gp-thumb{transition:opacity .16s var(--ease)}
-@media(hover:hover){html[data-motion=full] .album-cover:hover,html[data-motion=full] .tone-photo:hover,html[data-motion=full] .gp-preview-item:hover .gp-thumb{opacity:.94}}
+html[data-motion=full] .album-cover img,html[data-motion=full] .tone-photo img,html[data-motion=full] .gp-thumb img{transition:opacity .16s var(--ease)}
+@media(hover:hover){html[data-motion=full] .album-cover:hover img,html[data-motion=full] .tone-photo:hover img,html[data-motion=full] .gp-preview-item:hover .gp-thumb img{opacity:.92}}
 :root{view-transition-name:page-content}
 .topbar{view-transition-name:site-navigation}
 ::view-transition{pointer-events:none}

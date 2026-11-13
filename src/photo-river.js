@@ -58,12 +58,12 @@ export function createPhotoRiver({ host, Motion, url, openPhoto, storageGet, sto
     host.style.setProperty('--river-columns', String(Math.max(1, count)));
     if (!count) { host.dataset.empty = 'true'; sync(); return; }
     host.dataset.empty = 'false';
-    const gap = innerWidth < 760 ? 12 : 20;
+    const gap = innerWidth < 900 ? 10 : 16;
     const columnWidth = (host.clientWidth - gap * (count - 1)) / count;
     const maximum = Math.min(entries.length, count * budget.slots);
     for (let columnIndex = 0; columnIndex < count; columnIndex++) {
       const element = document.createElement('div'); element.className = 'river-column';
-      const column = { element, slots: [], offset: -columnWidth * (columnIndex % 2 ? .72 : .2), speed: (innerWidth < 760 ? 23 : 34) + columnIndex * 3, gap, hovering: false, focused: false };
+      const column = { element, slots: [], offset: columnIndex === 0 ? 12 : -columnWidth * (columnIndex % 2 ? .68 : .24), speed: (innerWidth < 760 ? 23 : 34) + columnIndex * 3, gap, hovering: false, focused: false };
       element.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') column.hovering = true; });
       element.addEventListener('pointerleave', () => { column.hovering = false; });
       host.appendChild(element); columns.push(column);
