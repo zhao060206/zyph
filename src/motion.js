@@ -35,10 +35,16 @@ export function createMotionController() {
     }, { threshold: .06, rootMargin: '0px 0px 40px' });
     for (const element of revealTargets) if (!element.isConnected) { revealObserver.unobserve(element); revealTargets.delete(element); }
     container.querySelectorAll('[data-reveal]').forEach((element, index) => {
-      if (element.classList.contains('is-revealed')) return;
+      if (element.classList.contains('is-revealed') || revealTargets.has(element)) return;
       element.style.setProperty('--reveal-delay', `${Math.min(index % 3, 2) * 60}ms`);
       element.classList.add('motion-pending'); revealObserver.observe(element); revealTargets.add(element);
     });
+  }
+  function resetHeroPresence() {
+    const hero = document.querySelector('.exhibition-hero');
+    if (!hero) return;
+    hero.classList.remove('is-hero-receded');
+    hero.style.removeProperty('--hero-img-opacity');
   }
   function setTier(value, reason, save = true) {
     tier = value; root.dataset.motion = value; root.dataset.motionReason = reason;
@@ -57,7 +63,7 @@ export function createMotionController() {
       if (revealObserver) revealObserver.disconnect(); revealObserver = null;
       revealTargets.clear();
       if (taskObserver) taskObserver.disconnect(); taskObserver = null;
-
+      resetHeroPresence();
     }
   }
   const limits = restriction();
@@ -183,10 +189,20 @@ export function createMotionController() {
       heroHeight = hero ? hero.offsetHeight : 0;
       if (hero && 'IntersectionObserver' in window) {
         heroObserver = new IntersectionObserver(entries => {
-          heroVisible = entries[0].isIntersecting;
+          const entry = entries[0];
+          heroVisible = entry.isIntersecting;
           hero.classList.toggle('motion-in-view', heroVisible && !document.hidden);
+          if (tier === 'full') {
+            const ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
+            const receded = !entry.isIntersecting || ratio < .45;
+            const imgOpacity = Math.max(.28, Math.min(1, .28 + .72 * Math.min(1, ratio / .55)));
+            hero.classList.toggle('is-hero-receded', receded);
+            hero.style.setProperty('--hero-img-opacity', imgOpacity.toFixed(2));
+          } else {
+            resetHeroPresence();
+          }
           scheduleFrame();
-        });
+        }, { threshold: [0, .15, .3, .45, .6, .75, .9, 1] });
         heroObserver.observe(hero);
       }
       window.addEventListener('scroll', () => scheduleFrame(true), { passive: true });

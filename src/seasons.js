@@ -1,4 +1,4 @@
-import { createSeasonScene, resizeSeasonScene, stepSeasonScene, depositOpacity, particlePose, depositPose } from './season-scene.mjs';
+import { createSeasonScene, resizeSeasonScene, stepSeasonScene, depositOpacity, particlePose, depositPose, seasonSafeEdge } from './season-scene.mjs';
 
 export const SEASONS = {
   spring: { label: '春', accent: '#e7a7b6', groups: ['pink', 'green'] },
@@ -48,11 +48,17 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
           }
           drawing.restore();
         }
+        for (let corner = 0; corner < 6; corner++) {
+          const angle = corner * Math.PI / 3;
+          const x = Math.sin(angle) * 12, y = -Math.cos(angle) * 12;
+          if (corner) drawing.lineTo(x, y); else drawing.moveTo(x, y);
+        }
+        drawing.closePath();
         drawing.stroke();
       };
       drawing.lineCap = drawing.lineJoin = 'round';
-      drawing.strokeStyle = 'rgba(72,110,148,.78)'; drawing.lineWidth = 4.8; crystal();
-      drawing.strokeStyle = '#f8fcff'; drawing.lineWidth = 2.6; crystal();
+      drawing.strokeStyle = 'rgba(116,154,192,.36)'; drawing.lineWidth = 2.0; crystal();
+      drawing.strokeStyle = 'rgba(248,252,255,.94)'; drawing.lineWidth = 1.2; crystal();
       return sprite;
     }
     // Small irregular snow clusters, shaded across their surface rather than outlined.
@@ -63,10 +69,10 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     drawing.translate(32,32); drawing.scale(1,.83 + index*.07);
     const gradient = drawing.createLinearGradient(-radius, -radius, radius, radius);
     gradient.addColorStop(0, 'rgba(255,255,255,.98)');
-    gradient.addColorStop(.6, 'rgba(235,245,254,.94)');
-    gradient.addColorStop(1, 'rgba(176,207,235,.74)');
+    gradient.addColorStop(.6, 'rgba(235,245,254,.92)');
+    gradient.addColorStop(1, 'rgba(176,207,235,.70)');
     drawing.fillStyle = gradient;
-    drawing.shadowColor = 'rgba(98,136,174,.35)'; drawing.shadowBlur = 2.5 + index;
+    drawing.shadowColor = 'rgba(98,136,174,.20)'; drawing.shadowBlur = 2 + index * .5;
     drawing.beginPath();
     for (let point = 0; point < 16; point++) {
       const angle = point / 16 * Math.PI * 2;
@@ -76,7 +82,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     }
     drawing.closePath(); drawing.fill();
     drawing.shadowBlur = 0;
-    drawing.strokeStyle = 'rgba(104,142,180,.24)'; drawing.lineWidth = 1.3; drawing.stroke();
+    drawing.strokeStyle = 'rgba(130,164,198,.12)'; drawing.lineWidth = .7; drawing.stroke();
     return sprite;
   }
 
@@ -85,7 +91,7 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
     sprite.width = 128; sprite.height = 512;
     const drawing = sprite.getContext('2d');
     const across = drawing.createLinearGradient(0, 0, 128, 0);
-    across.addColorStop(0, 'rgba(255,245,203,0)'); across.addColorStop(.5, 'rgba(255,245,203,.25)'); across.addColorStop(1, 'rgba(255,245,203,0)');
+    across.addColorStop(0, 'rgba(255,245,203,0)'); across.addColorStop(.5, 'rgba(255,245,203,.18)'); across.addColorStop(1, 'rgba(255,245,203,0)');
     drawing.fillStyle = across; drawing.fillRect(0, 0, 128, 512);
     drawing.globalCompositeOperation = 'destination-in';
     const length = drawing.createLinearGradient(0, 0, 0, 512);
@@ -191,29 +197,43 @@ export function createSeasons({ Motion, storageGet, storageSet }) {
       if (kind === 'summer') {
         for (let beam = 0; beam < (quality === 1 ? 3 : 1); beam++) {
           context.save();
-          context.translate(width * .85, -100); context.rotate(.3 + beam * .22 + Math.sin(elapsed * .12) * .035);
+          context.translate(width * .85, -100); context.rotate(.3 + beam * .22 + Math.sin(elapsed * .08) * .035);
           context.drawImage(sprites[0], -width * .12, 0, width * .24, height * 1.4);
           context.restore();
         }
       }
-      const safeEdge = Math.max(10, Math.min(28, width * .022)) + Math.max(0, (width - 1560) * .5);
+      const safeEdge = seasonSafeEdge(width, edgeOnly);
       const mobileFactor = width < 760 ? .5 : 1;
+      const edgeOpacity = (x, baseAlpha) => {
+        if (!edgeOnly || x <= safeEdge || x >= width - safeEdge) return baseAlpha;
+        const dist = Math.min(x - safeEdge, width - safeEdge - x);
+        return dist > 14 ? 0 : baseAlpha * Math.max(0, 1 - dist / 14);
+      };
       for (let index = 0; index < Math.floor(scene.particles.length * quality); index++) {
         const particle = scene.particles[index];
-        let alpha = particle.alpha * (edgeOnly ? mobileFactor : 1);
-        if (edgeOnly && particle.x > safeEdge && particle.x < width - safeEdge) {
-          const dist = Math.min(particle.x - safeEdge, width - safeEdge - particle.x);
-          if (dist > 14) continue;
-          alpha *= Math.max(0, 1 - dist / 14);
+        let alpha = edgeOpacity(particle.x, particle.alpha * (edgeOnly ? mobileFactor : 1));
+        if (!edgeOnly) {
+          if (width >= 900 && particle.x < width * .34 && particle.y < height * .82) {
+            const xFactor = Math.max(0, Math.min(1, (particle.x - width * .25) / (width * .09)));
+            const yFactor = particle.y > height * .70 ? Math.max(0, Math.min(1, (height * .82 - particle.y) / (height * .12))) : 1;
+            alpha *= 1 - (1 - xFactor) * yFactor;
+          } else if (width < 900 && particle.y < height * .36) {
+            const yFactor = Math.max(0, Math.min(1, (particle.y - height * .26) / (height * .10)));
+            alpha *= yFactor;
+          }
         }
+        if (alpha <= .005) continue;
         const pose = particlePose(particle, elapsed);
         paintParticle(particle, particle.x, particle.y, pose.rotation, alpha, pose.flatten);
       }
-      context.restore();
       for (const deposit of scene.deposits) {
+        const depX = deposit.x * width;
+        const alpha = edgeOpacity(depX, depositOpacity(deposit) * (edgeOnly ? mobileFactor : 1));
+        if (alpha <= .005) continue;
         const pose = depositPose(deposit);
-        paintParticle(deposit, deposit.x * width, height - deposit.floor, pose.rotation, depositOpacity(deposit), pose.flatten);
+        paintParticle(deposit, depX, height - deposit.floor, pose.rotation, alpha, pose.flatten);
       }
+      context.restore();
       if (performance.now() - begin > 6) expensive++;
     }
     frame = requestAnimationFrame(draw);

@@ -289,7 +289,7 @@ const Store={
     if(CONFIG.cosBucket){
       for(let attempt=0;attempt<2;attempt++){
         try{
-          const r=await fetchWithTimeout(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'},9000);
+          const r=await fetchWithTimeout(`https://${CONFIG.cosBucket}.cos.${CONFIG.cosRegion}.myqcloud.com/data.json`,{cache:'no-store'},4500);
           if(r.ok){
             const d=await r.json();
             if(d&&Array.isArray(d.groups)){
@@ -404,6 +404,7 @@ const Social={
   g:null,p:null,         /* 当前悬浮窗正在看的照片 */
   talkG:null,            /* 当前组详情页正在看的组(组留言用) */
   avatarsPainted:false,
+  drafts:new Map(),
 
   /* 后端地址:同源部署时留空即可(相对路径);本地分离调试时可在 CONFIG 里改 */
   base(){return (CONFIG.apiBase||'').replace(/\/+$/,'')},
@@ -424,7 +425,6 @@ const Social={
     Identity.init();
     this.bindUI();
     this.paintMe();
-    this.setOffline(true);
     // 点开作品或组页后再读取当前互动记录。
   },
 
@@ -490,13 +490,24 @@ const Social={
   },
 
   /* ─── 悬浮窗切图时刷新互动区 ─── */
+  saveDraft(g=this.g,p=this.p){
+    const key=this.key(g,p),inp=$('#cmInput');
+    if(!key||!inp)return;
+    if(inp.value)this.drafts.set(key,inp.value);
+    else this.drafts.delete(key);
+  },
+
   bind(g,p){
+    if(this.g&&this.p)this.saveDraft(this.g,this.p);
     this.g=g;this.p=p;
     this.refresh();
     this.load(this.key(g,p));
-    /* 输入框:属于「当前这张照片」,切图时清空防止误发到别的照片 */
+    /* 输入框:按照片 key 暂存草稿,切图时自动隔离 */
     const inp=$('#cmInput');
-    if(inp)inp.value='';
+    if(inp){
+      inp.value=this.drafts.get(this.key(g,p))||'';
+      inp.style.height='';
+    }
   },
 
   /* ─── 组详情页:绑定当前组,刷新组留言 ─── */
@@ -613,15 +624,18 @@ const Social={
     if(nm)nm.textContent=Identity.nick;
     const gi=$('#avGrid');
     if(gi&&!this.avatarsPainted){
-      gi.innerHTML=Avatar.list.map(a=>
-        `<span class="av-opt${a.id===Identity.avatar?' sel':''}" data-av="${a.id}" title="选择这个头像">${Avatar.svg(a.id,40)}</span>`
-      ).join('');
+      gi.innerHTML=Avatar.list.map(a=>{
+        const on=a.id===Identity.avatar;
+        return `<button type="button" class="av-opt${on?' sel':''}" data-av="${a.id}" aria-pressed="${on?'true':'false'}" title="选择这个头像">${Avatar.svg(a.id,40)}</button>`;
+      }).join('');
       this.avatarsPainted=true;
     }
     const grid=$('#avGrid');
     if(grid){
       grid.querySelectorAll('.av-opt').forEach(el=>{
-        el.classList.toggle('sel',el.dataset.av===Identity.avatar);
+        const on=el.dataset.av===Identity.avatar;
+        el.classList.toggle('sel',on);
+        el.setAttribute('aria-pressed',on?'true':'false');
       });
     }
     const mi=$('#meInput');
@@ -664,21 +678,24 @@ const Social={
       inp.addEventListener('keydown',e=>{
         if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();this.postComment()}
       });
-      /* 输入时自动长高(不超过 110px) */
+      /* 输入时自动长高(不超过 110px)并同步草稿 */
       inp.addEventListener('input',()=>{
         inp.style.height='auto';
         inp.style.height=Math.min(110,Math.max(42,inp.scrollHeight))+'px';
+        if(this.g&&this.p)this.saveDraft(this.g,this.p);
       });
     }
     /* 身份编辑面板开关 */
     const ed=$('#meEdit');
     if(ed&&!ed.dataset.bound){
       ed.dataset.bound='1';
+      ed.setAttribute('aria-expanded','false');
       ed.addEventListener('click',()=>{
         const pn=$('#mePanel');
         if(!pn)return;
         pn.hidden=!pn.hidden;
-        ed.textContent=pn.hidden?'改名字':'收起';
+        ed.textContent=pn.hidden?'编辑身份':'收起';
+        ed.setAttribute('aria-expanded',String(!pn.hidden));
         if(!pn.hidden){this.paintMe();const mi=$('#meInput');if(mi)mi.focus()}
       });
     }
@@ -713,7 +730,7 @@ const Social={
         const pn=$('#mePanel');
         if(pn)pn.hidden=true;
         const ed2=$('#meEdit');
-        if(ed2)ed2.textContent='改名字';
+        if(ed2){ed2.textContent='编辑身份';ed2.setAttribute('aria-expanded','false');}
         this.setHint('已保存你的名字与头像');
         /* 名字/头像变了,已发的评论与点赞仍归属同一身份,只需重绘画像与列表 */
         this.refresh();
@@ -849,7 +866,7 @@ const Social={
   async _post(key,ui){
     if(!key)return;
     const inp=$(ui.inp),btn=$(ui.btn);
-    if(!this.ready||btn&&btn.dataset.sending)return;
+    if(btn&&btn.dataset.sending)return;
     const current=()=>ui.inp==='#gtInput'?this.talkKey(this.talkG)===key:this.key(this.g,this.p)===key;
     const text=(inp&&inp.value||'').trim();
     if(!text){ui.hint('请先写点什么再发送',true);return}
@@ -865,6 +882,7 @@ const Social={
       rec.comments.push(r.comment);
       this.ready=true;
       this.setOffline(false);
+      if(ui.inp==='#cmInput')this.drafts.delete(key);
       if(current()&&inp&&inp.value.trim()===text){inp.value='';inp.style.height=''}
       if(current()){ui.hint('已发布');setTimeout(()=>{if(current())ui.hint('')},2200)}
       ui.after();
@@ -965,13 +983,11 @@ const Vote={
       subBtn.hidden=!subOn;
     }
     m.hidden=false;
-    document.body.style.overflow='hidden';
   },
 
   closeNotice(){
     const m=$('#voteNoticeModal');
     if(m)m.hidden=true;
-    if($('#voteBoardModal').hidden)document.body.style.overflow='';
   },
 
   /* 打开全屏投票选片画板 */
@@ -980,7 +996,6 @@ const Vote={
     const b=$('#voteBoardModal');
     if(!b)return;
     b.hidden=false;
-    document.body.style.overflow='hidden';
     const max=this.getMaxVotes();
     $('#vbTitle').textContent=this.config.title||'摄影作品评选';
     const tag=$('.vb-tag');
@@ -993,9 +1008,9 @@ const Vote={
   },
 
   closeBoard(){
+    this.closePreview();
     const b=$('#voteBoardModal');
     if(b)b.hidden=true;
-    document.body.style.overflow='';
   },
 
   photoKey(g,p){
@@ -1003,16 +1018,90 @@ const Vote={
     return p.k||((g&&g.d)?(g.d+'#'+(p.u||p.t)):(p.u||p.t||'unknown'));
   },
 
-  /* 平铺全站照片网格 (真实照片与演示照片均可参选) */
-  renderGrid(){
-    const grid=$('#vbGrid');
-    if(!grid)return;
+  allEntries(){
     const all=[];
     (Store.groups||[]).forEach(g=>{
       (g.gs||[]).forEach(p=>{
         if(p.k||p.u)all.push({p,g,key:this.photoKey(g,p)});
       });
     });
+    return all;
+  },
+
+  closePreview(){
+    const ov=document.getElementById('vbPreviewModal');
+    if(ov&&ov.parentNode){
+      if(ov._onKey)removeEventListener('keydown',ov._onKey);
+      Dialogs.unregister(ov);
+      ov.parentNode.removeChild(ov);
+    }
+  },
+
+  openPreview(key){
+    const entries=this.allEntries();
+    let idx=entries.findIndex(item=>item.key===key);
+    if(idx<0)return;
+    this.closePreview();
+    const ov=document.createElement('div');
+    ov.id='vbPreviewModal';
+    ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','参选作品大图预览');
+    ov.style.cssText='position:fixed;inset:0;z-index:2700;background:rgba(9,10,12,.92);color:#f4f3ef;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`
+      <div class="vb-pv-box" style="position:relative;display:flex;flex-wrap:wrap;width:min(1140px,100%);max-height:90vh;background:#121316;border:1px solid rgba(244,243,239,.14);border-radius:4px;overflow:auto">
+        <button type="button" class="lb-close" id="vbPvClose" aria-label="关闭大图预览" style="top:12px;right:12px">✕</button>
+        <div style="position:relative;flex:1 1 460px;min-width:0;min-height:260px;background:#08090b;display:flex;align-items:center;justify-content:center;padding:16px">
+          <button type="button" class="nav-btn nav-prev" id="vbPvPrev" aria-label="上一张" style="left:12px">←</button>
+          <img id="vbPvImg" alt="" decoding="async" style="max-width:100%;max-height:76vh;object-fit:contain">
+          <button type="button" class="nav-btn nav-next" id="vbPvNext" aria-label="下一张" style="right:12px">→</button>
+        </div>
+        <aside style="flex:1 1 280px;max-width:100%;padding:24px 20px;overflow:auto;border-left:1px solid rgba(244,243,239,.1);display:flex;flex-direction:column;gap:12px">
+          <div id="vbPvIdx" style="font:500 12px/1 var(--mono);color:rgba(244,243,239,.6)"></div>
+          <div id="vbPvTitle" style="font:500 18px/1.35 var(--sans);padding-right:36px"></div>
+          <div id="vbPvGroup" style="font:12px/1.5 var(--mono);color:rgba(244,243,239,.65)"></div>
+          <div id="vbPvExif" class="lb-exif" style="margin-top:4px"></div>
+          <p id="vbPvCap" class="lb-caption" style="margin-top:4px"></p>
+        </aside>
+      </div>`;
+    const render=()=>{
+      const {p,g}=entries[idx];
+      const img=ov.querySelector('#vbPvImg');
+      const small=safeUrl(pURL(p,Thumb.SMALL));
+      const view=safeUrl(pView(p));
+      img.alt=p.t||g.title;
+      img.src=small;
+      if(view&&view!==small){
+        const hi=new Image();
+        const tok=idx;
+        hi.onload=()=>{if(ov.isConnected&&idx===tok)img.src=view};
+        hi.src=view;
+      }
+      ov.querySelector('#vbPvIdx').textContent=`${idx+1} / ${entries.length}`;
+      ov.querySelector('#vbPvTitle').textContent=p.t||g.title;
+      ov.querySelector('#vbPvGroup').textContent=`${g.title} · ${g.d}`;
+      const exifHTML=p.exif||g.exif||'';
+      ov.querySelector('#vbPvExif').innerHTML=exifHTML?ExifCard.render(exifHTML):'';
+      ov.querySelector('#vbPvCap').textContent=(p.d&&p.d.trim())?p.d.trim():(g.c||'');
+    };
+    const step=d=>{idx=(idx+d+entries.length)%entries.length;render()};
+    ov.addEventListener('click',e=>{if(e.target===ov)this.closePreview()});
+    ov.querySelector('#vbPvClose').addEventListener('click',()=>this.closePreview());
+    ov.querySelector('#vbPvPrev').addEventListener('click',()=>step(-1));
+    ov.querySelector('#vbPvNext').addEventListener('click',()=>step(1));
+    ov._onKey=e=>{
+      if(e.key==='ArrowLeft')step(-1);
+      else if(e.key==='ArrowRight')step(1);
+    };
+    addEventListener('keydown',ov._onKey);
+    document.body.appendChild(ov);
+    Dialogs.register(ov,()=>this.closePreview());
+    render();
+  },
+
+  /* 平铺全站照片网格 (真实照片与演示照片均可参选) */
+  renderGrid(){
+    const grid=$('#vbGrid');
+    if(!grid)return;
+    const all=this.allEntries();
     if(!all.length){
       grid.innerHTML='<div class="cm-empty">画廊作品载入中,请稍候片刻…</div>';
       return;
@@ -1021,7 +1110,10 @@ const Vote={
       const isSel=this.userVoted?this.votedKeys.includes(key):this.selectedKeys.includes(key);
       return `
       <div class="vb-card${isSel?' selected':''}" data-key="${esc(key)}" tabindex="0" role="button" aria-pressed="${isSel?'true':'false'}" aria-label="选择 ${esc(p.t)}">
-        <div class="vb-badge-sel">✓</div>
+        <div class="vb-badge-sel" style="right:auto;left:14px">✓</div>
+        <button type="button" class="vb-zoom-btn vb-preview-btn" data-preview-key="${esc(key)}" aria-label="查看大图 ${esc(p.t||g.title)}" title="查看大图" style="left:auto;right:12px;top:12px">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.8 15.8L20 20M11 8.5v5M8.5 11h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
         <div class="vb-thumb"><img src="${safeUrl(pURL(p,480))}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
         <div class="vb-card-t">${esc(p.t||g.title)}</div>
       </div>`;
@@ -1106,8 +1198,13 @@ const Vote={
     const grid=$('#vbGrid');
     if(grid&&!grid.dataset.bound){
       grid.dataset.bound='1';
-      grid.addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.closest('.vb-card')){event.preventDefault();event.target.closest('.vb-card').click()}});
+      grid.addEventListener('keydown',event=>{
+        if(event.target.closest('.vb-preview-btn'))return;
+        if((event.key==='Enter'||event.key===' ')&&event.target.closest('.vb-card')){event.preventDefault();event.target.closest('.vb-card').click()}
+      });
       grid.addEventListener('click',e=>{
+        const pv=e.target.closest('.vb-preview-btn');
+        if(pv){e.stopPropagation();this.openPreview(pv.dataset.previewKey);return}
         if(this.userVoted||this._submitting)return;
         const card=e.target.closest('.vb-card');
         if(!card)return;
@@ -1144,23 +1241,29 @@ const Vote={
     const qqInp=$('#vbQQ');
     if(qqInp&&!qqInp.dataset.bound){
       qqInp.dataset.bound='1';
+      const syncQQHint=(fromBlur)=>{
+        const hint=$('#vbHint');
+        if(!hint)return;
+        const val=qqInp.value.trim();
+        if(!val){hint.textContent='';hint.className='vb-hint';return}
+        if(/^\d{5,13}$/.test(val)){hint.textContent='';hint.className='vb-hint';return}
+        if(fromBlur||val.length>=5){
+          hint.textContent='QQ号需为5-13位数字';
+          hint.className='vb-hint err';
+        }else{
+          hint.textContent='';
+          hint.className='vb-hint';
+        }
+      };
       qqInp.addEventListener('input',()=>{
         const btn=$('#vbSubmit');
         const max=this.getMaxVotes();
         if(btn&&!this.userVoted&&!this._submitting){
           btn.disabled=!this.selectedKeys.length||this.selectedKeys.length>max||!this.checkQQ();
         }
-        const hint=$('#vbHint');
-        if(hint){
-          if(qqInp.value && !/^\d{5,13}$/.test(qqInp.value.trim())){
-            hint.textContent='QQ号需为5-13位数字';
-            hint.className='vb-hint err';
-          }else{
-            hint.textContent='';
-            hint.className='vb-hint';
-          }
-        }
+        syncQQHint(false);
       });
+      qqInp.addEventListener('blur',()=>syncQQHint(true));
     }
 
     const subBtn=$('#vbSubmit');
@@ -1234,7 +1337,6 @@ const Submission={
     const b=$('#subBoardModal');
     if(!b)return;
     b.hidden=false;
-    document.body.style.overflow='hidden';
     const max=this.getMaxPhotos();
     $('#sbTitle').textContent=this.config.title||'摄影作品征集';
     const tag=$('#sbTag');if(tag)tag.textContent=`最多 ${max} 张`;
@@ -1247,8 +1349,6 @@ const Submission={
   closeBoard(){
     const b=$('#subBoardModal');
     if(b)b.hidden=true;
-    if(($('#voteNoticeModal')&&!$('#voteNoticeModal').hidden)||($('#voteBoardModal')&&!$('#voteBoardModal').hidden)){}
-    else{document.body.style.overflow='';}
   },
 
   /* 渲染 1~3 张照片选取卡片 */
@@ -1257,6 +1357,7 @@ const Submission={
     if(!grid)return;
     const max=this.getMaxPhotos();
     const list=this.userSubmitted&&this.submittedItem?(this.submittedItem.photos||[]):this.photos;
+    const pending=this.userSubmitted?[]:(this._pending||[]);
 
     let html='';
     list.forEach((p,idx)=>{
@@ -1272,11 +1373,23 @@ const Submission={
       `;
     });
 
-    if(!this.userSubmitted&&list.length<max){
+    pending.forEach((item,pi)=>{
+      const num=list.length+pi+1;
       html+=`
-        <button class="sb-card sb-add-card" id="sbAddBtn" type="button" aria-label="挑选照片上传">
+        <div class="sb-card has-img is-loading" aria-busy="true">
+          <span class="sb-card-num">${String(num).padStart(2,'0')}</span>
+          ${item.previewUrl?`<img src="${safeUrl(item.previewUrl)}" alt="${esc(item.title)}" style="opacity:.55">`:''}
+          <span style="position:absolute;inset:auto 8px 8px;padding:4px 8px;border-radius:4px;background:rgba(10,10,12,.78);color:#fff;font:11px/1.3 var(--mono);text-align:center">${esc(item.status||'处理中…')}</span>
+        </div>
+      `;
+    });
+
+    const totalUsed=list.length+pending.length;
+    if(!this.userSubmitted&&totalUsed<max){
+      html+=`
+        <button class="sb-card sb-add-card" id="sbAddBtn" type="button" aria-label="点击或拖拽挑选照片上传">
           <div class="sb-add-ico">＋</div>
-          <div class="sb-add-txt">添加照片 (${list.length}/${max})</div>
+          <div class="sb-add-txt">点击或拖拽添加 (${totalUsed}/${max})</div>
         </button>
       `;
     }
@@ -1300,16 +1413,30 @@ const Submission={
     }
   },
 
-  /* 选图后处理: 纯前端离屏压缩生成高清(1600)和小图(480) */
+  /* 选图后处理:纯前端离屏压缩生成高清(1600)和小图(480),保留逐张实时缩略图与状态 */
   async handleFiles(fileList){
     if(this._processing||this._submitting||this.userSubmitted)return;
     const files=Array.from(fileList||[]),remain=this.getMaxPhotos()-this.photos.length;
     if(!files.length||remain<=0)return;
-    this._processing=true;this.updateBar();
-    const hint=$('#sbHint');hint.textContent='正在生成浏览预览，请稍候…';hint.className='vb-hint';
+    const batch=files.slice(0,remain);
+    this._processing=true;
+    this._pending=batch.map(file=>({
+      file,
+      title:file.name.replace(/\.[^.]+$/,'').slice(0,40),
+      previewUrl:(typeof URL!=='undefined'&&URL.createObjectURL&&/^image\//i.test(file.type||''))?URL.createObjectURL(file):'',
+      status:'等待处理'
+    }));
+    this.renderCards();
+    this.updateBar();
+    const hint=$('#sbHint');
+    if(hint){hint.textContent=`正在处理 ${batch.length} 张作品…`;hint.className='vb-hint';}
     let failed=0,added=0;
     try{
-      for(const file of files.slice(0,remain)){
+      for(let i=0;i<batch.length;i++){
+        const file=batch[i];
+        const pend=this._pending[0];
+        if(pend){pend.status=`压缩中 (${added+failed+1}/${batch.length})`;this.renderCards();}
+        if(hint)hint.textContent=`正在生成浏览预览 (${added+failed+1}/${batch.length})…`;
         try{
           if(file.size>30*1024*1024)throw new Error('文件超过 30MB');
           if(!/^image\/(jpeg|jpg|png|webp|gif)$/i.test(file.type)&&!(/\.(jpe?g|png|webp|gif)$/i.test(file.name)&&!file.type))throw new Error('格式不支持');
@@ -1318,11 +1445,20 @@ const Submission={
           const values=await Promise.all([this.blobToDataUrl(view),this.blobToDataUrl(small)]);
           this.photos.push({data:values[0],tn:values[1],title:file.name.replace(/\.[^.]+$/,'').slice(0,40)});added++;
         }catch(error){failed++}
+        const finished=this._pending.shift();
+        if(finished&&finished.previewUrl){try{URL.revokeObjectURL(finished.previewUrl)}catch(e){}}
+        this.renderCards();
       }
     }finally{
+      if(this._pending&&this._pending.length){
+        this._pending.forEach(item=>{if(item.previewUrl){try{URL.revokeObjectURL(item.previewUrl)}catch(e){}}});
+      }
+      this._pending=[];
       this._processing=false;this.renderCards();this.updateBar();
-      hint.textContent=failed?`已添加 ${added} 张，${failed} 张无法处理。请选择 30MB 内的 JPEG、PNG、WebP 或 GIF。`:`已添加 ${added} 张作品`;
-      hint.className=failed?'vb-hint err':'vb-hint';
+      if(hint){
+        hint.textContent=failed?`已添加 ${added} 张，${failed} 张无法处理。请选择 30MB 内的 JPEG、PNG、WebP 或 GIF。`:`已添加 ${added} 张作品`;
+        hint.className=failed?'vb-hint err':'vb-hint';
+      }
     }
   },
 
@@ -1381,22 +1517,55 @@ const Submission={
       });
     }
 
+    const grid=$('#sbPickGrid');
+    if(grid&&!grid.dataset.dndBound){
+      grid.dataset.dndBound='1';
+      const setOver=on=>{
+        grid.classList.toggle('is-dragover',!!on);
+        $('#sbAddBtn')?.classList.toggle('is-dragover',!!on);
+      };
+      grid.addEventListener('dragenter',e=>{
+        if(this._processing||this._submitting||this.userSubmitted)return;
+        e.preventDefault();setOver(true);
+      });
+      grid.addEventListener('dragover',e=>{
+        if(this._processing||this._submitting||this.userSubmitted)return;
+        e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';
+        setOver(true);
+      });
+      grid.addEventListener('dragleave',e=>{
+        if(!grid.contains(e.relatedTarget))setOver(false);
+      });
+      grid.addEventListener('drop',e=>{
+        e.preventDefault();e.stopPropagation();setOver(false);
+        if(this._processing||this._submitting||this.userSubmitted)return;
+        if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){
+          this.handleFiles(e.dataTransfer.files);
+        }
+      });
+    }
+
     const qqInp=$('#sbQQ');
     if(qqInp&&!qqInp.dataset.bound){
       qqInp.dataset.bound='1';
+      const syncQQHint=(fromBlur)=>{
+        const hint=$('#sbHint');
+        if(!hint)return;
+        const val=qqInp.value.trim();
+        if(!val||/^\d{5,13}$/.test(val)){hint.textContent='';hint.className='vb-hint';return}
+        if(fromBlur||val.length>=5){
+          hint.textContent='QQ号需为5-13位数字';
+          hint.className='vb-hint err';
+        }else{
+          hint.textContent='';
+          hint.className='vb-hint';
+        }
+      };
       qqInp.addEventListener('input',()=>{
         this.updateBar();
-        const hint=$('#sbHint');
-        if(hint){
-          if(qqInp.value && !/^\d{5,13}$/.test(qqInp.value.trim())){
-            hint.textContent='QQ号需为5-13位数字';
-            hint.className='vb-hint err';
-          }else{
-            hint.textContent='';
-            hint.className='vb-hint';
-          }
-        }
+        syncQQHint(false);
       });
+      qqInp.addEventListener('blur',()=>syncQQHint(true));
     }
 
     $('#sbSubmit')?.addEventListener('click',()=>this.submit());
@@ -1447,44 +1616,141 @@ const Submission={
   }
 };
 
+/* ─── 共享纵横比缓存:照片流、归档与组详情共用已解码尺寸,避免重复跳动 ─── */
+const RatioStore=(()=>{
+  const map=new Map();
+  const key=(p,src)=>{
+    if(typeof p==='string'&&p)return p;
+    if(p&&typeof p==='object'){if(p.k)return p.k;if(p.u)return p.u;}
+    return typeof src==='string'?src:'';
+  };
+  const get=(p,src)=>{
+    const k=key(p,src);
+    if(k&&map.has(k))return map.get(k);
+    if(typeof src==='string'&&src&&map.has(src))return map.get(src);
+    const archived=typeof Archive!=='undefined'&&Archive&&typeof Archive.getPhotoRatio==='function'?Archive.getPhotoRatio(p,src):0;
+    if(archived>0&&k)map.set(k,archived);
+    return archived||0;
+  };
+  const set=(p,src,ratio)=>{
+    const r=ratio===undefined&&typeof src==='number'?src:ratio;
+    const url=ratio===undefined&&typeof src==='number'?'':src;
+    const v=Number(r);
+    if(!Number.isFinite(v)||v<=0)return 0;
+    const k=key(p,url);
+    if(k)map.set(k,v);
+    if(typeof url==='string'&&url)map.set(url,v);
+    return v;
+  };
+  return {map,get,set};
+})();
+
 /* ─── 归档:年→月→日三级折叠;日展开显示该组印样 ─── */
-const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,Motion,storageGet,storageSet,
+const Archive=createArchive({$,Store,YEARS,totalPhotos,esc,pURL,pView,Motion,storageGet,storageSet,ratioCache:RatioStore.map,getRatio:RatioStore.get,onRatio:RatioStore.set,
   openGroup:day=>Motion.transition(()=>GroupPage.open(day)),openProof:(day,idx)=>{const g=groupOf(day);if(g)Lightbox.open(g,idx)},closeGroup:()=>Motion.transition(()=>GroupPage.close(),{back:true}),openAdmin:()=>Admin.open()});
 
 /* ─── 组详情子页面 ─── */
 const GroupPage={
-  el:null,previews:null,g:null,
+  el:null,previews:null,g:null,_pendingOpen:'',_pendingClose:false,
   init(){
     this.el=$('#groupPage');
     this.previews=$('#gpPreviews');
     this.blank=$('#gpBlank');
     $('#gpBack').addEventListener('click',()=>Motion.transition(()=>this.close(),{back:true}));
+    $('#gpPrev')?.addEventListener('click',()=>{const d=$('#gpPrev')?.dataset.day;if(d)Motion.transition(()=>this.open(d,{step:true}),{back:true});});
+    $('#gpNext')?.addEventListener('click',()=>{const d=$('#gpNext')?.dataset.day;if(d)Motion.transition(()=>this.open(d,{step:true}));});
+    const syncFromHash=()=>{
+      if(location.hash==='#admin'||(typeof Admin!=='undefined'&&Admin.el&&!Admin.el.hidden))return;
+      if(location.hash.startsWith('#group=')){
+        let day='';
+        try{day=decodeURIComponent(location.hash.slice(7))}catch(e){}
+        if(day&&groupOf(day)&&(this.el.hidden||!this.g||this.g.d!==day)&&this._pendingOpen!==day){
+          this._pendingOpen=day;
+          this._pendingClose=false;
+          Motion.transition(()=>{this._pendingOpen='';this.open(day,{fromHash:true});});
+        }
+        return;
+      }
+      if(!this.el.hidden&&!this._pendingClose){
+        this._pendingClose=true;
+        this._pendingOpen='';
+        Motion.transition(()=>{this._pendingClose=false;this.close({fromHash:true});},{back:true});
+      }
+    };
+    addEventListener('hashchange',syncFromHash);
+    addEventListener('popstate',syncFromHash);
     /* 预览图点击 → 打开悬浮窗 */
     this.previews.addEventListener('click',e=>{
       const item=e.target.closest('.gp-preview-item');
       if(item)Lightbox.open(this.g,+item.dataset.idx);
     });
   },
-  open(day){
+  open(day,opt={}){
+    this._pendingOpen='';
+    this._pendingClose=false;
     this.g=groupOf(day);
     if(!this.g)return;
-    if(this.el.hidden){this.returnScroll=window.scrollY;this.returnFocus=document.activeElement}
+    const wasHidden=this.el.hidden;
+    if(wasHidden){
+      this.returnScroll=opt.fromHash?0:window.scrollY;
+      this.returnFocus=opt.fromHash?null:document.activeElement;
+    }
+    const targetHash='#group='+encodeURIComponent(this.g.d);
+    if(!opt.fromHash&&location.hash!=='#admin'&&location.hash!==targetHash){
+      if(wasHidden)history.pushState({group:this.g.d},'',targetHash);
+      else history.replaceState({group:this.g.d},'',targetHash);
+    }
     this.paint();
     $('#archive').hidden=true;
     this.el.hidden=false;
     document.querySelector('.topbar').classList.add('is-inner');
-    window.scrollTo({top:0,behavior:'auto'});
+    try{window.scrollTo({top:0,behavior:'instant'})}catch(e){window.scrollTo(0,0)}
     document.title=`${this.g.title} · Phototropic`;
     /* 组留言:进入这一组时加载并显示它的留言(空组也有) */
     Social.bindGroup(this.g);
   },
-  close(){
+  close(opt={}){
+    this._pendingOpen='';
+    this._pendingClose=false;
     if(this.el.hidden)return;
     this.el.hidden=true;$('#archive').hidden=false;
     document.querySelector('.topbar').classList.remove('is-inner');
     document.title='Phototropic · 光影档案';
-    window.scrollTo(0,this.returnScroll||0);
+    if(!opt.fromHash&&location.hash.startsWith('#group=')){
+      history.replaceState(null,'',location.pathname+location.search);
+    }
+    const y=this.returnScroll||0;
+    try{window.scrollTo({top:y,behavior:'instant'})}catch(e){window.scrollTo(0,y)}
     if(this.returnFocus&&this.returnFocus.isConnected)this.returnFocus.focus({preventScroll:true});
+  },
+  paintNav(){
+    const nav=$('#gpNav'),prevBtn=$('#gpPrev'),nextBtn=$('#gpNext');
+    if(!nav||!prevBtn||!nextBtn||!this.g)return;
+    const ordered=[...(Store.groups||[])].sort((a,b)=>b.d.localeCompare(a.d));
+    const idx=ordered.findIndex(item=>item.d===this.g.d);
+    const prev=idx>0?ordered[idx-1]:null;
+    const next=idx>=0&&idx<ordered.length-1?ordered[idx+1]:null;
+    if(prev){
+      prevBtn.hidden=false;
+      prevBtn.dataset.day=prev.d;
+      prevBtn.innerHTML=`<span class="gp-nav-dir">← 上一组</span><span class="gp-nav-title">${esc(prev.title)}</span>`;
+      prevBtn.setAttribute('aria-label',`上一组：${prev.title}`);
+    }else{
+      prevBtn.hidden=true;
+      delete prevBtn.dataset.day;
+      prevBtn.innerHTML='';
+    }
+    if(next){
+      nextBtn.hidden=false;
+      nextBtn.dataset.day=next.d;
+      nextBtn.innerHTML=`<span class="gp-nav-dir">下一组 →</span><span class="gp-nav-title">${esc(next.title)}</span>`;
+      nextBtn.setAttribute('aria-label',`下一组：${next.title}`);
+    }else{
+      nextBtn.hidden=true;
+      delete nextBtn.dataset.day;
+      nextBtn.innerHTML='';
+    }
+    nav.hidden=!prev&&!next;
   },
   paint(){
     const g=this.g;
@@ -1498,28 +1764,50 @@ const GroupPage={
       note.textContent=c;
       note.hidden=!c;
     }
+    /* 统计组内主用相机/镜头（众数）归并到页眉 #gpGear，下方同器材卡片仅显示单行光学参数 */
+    const photos=Array.isArray(g.gs)?g.gs:[];
+    const headCounts=new Map();
+    const rowHeads=photos.map(p=>ExifCard.parts(p.exif||g.exif||'').head);
+    for(const h of rowHeads){if(h)headCounts.set(h,(headCounts.get(h)||0)+1);}
+    let sharedGear='';let maxCount=0;
+    for(const [h,count] of headCounts){if(count>maxCount){sharedGear=h;maxCount=count;}}
+    const gearEl=$('#gpGear');
+    if(gearEl){
+      gearEl.textContent=sharedGear;
+      gearEl.hidden=!sharedGear;
+    }
+    this.paintNav();
     /* 没有照片的组:隐藏空白网格,改显示说明,让"空组"看起来是刻意的状态而不是坏页 */
-    const empty=!g.gs||!g.gs.length;
+    const empty=!photos.length;
     if(this.blank)this.blank.hidden=!empty;
     this.previews.hidden=empty;
     if(empty){this.previews.innerHTML='';return}
-    /* 预览图网格:每张图片正下方带各自的相机参数(机身型号 + 参数),单张无则回退整组默认 */
-    this.previews.innerHTML=g.gs.map((p,i)=>`
-      <figure class="gp-preview-item" data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
-        <div class="gp-thumb"><img src="${safeUrl(pURL(p,500))}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
+    /* 预览图网格:每张图片正下方带各自的相机参数(与页眉主用器材一致时跳过重复机型标题) */
+    this.previews.innerHTML=photos.map((p,i)=>{
+      const src=pURL(p,500);
+      const known=RatioStore.get(p,src);
+      const thumbStyle=known>0?` style="aspect-ratio:${Math.max(.72,Math.min(1.65,known)).toFixed(3)}"`:'';
+      const rawExif=p.exif||g.exif||'';
+      const skipHead=Boolean(sharedGear&&rowHeads[i]===sharedGear);
+      return `
+      <figure class="gp-preview-item" data-reveal data-idx="${i}" style="--i:${i}" tabindex="0" role="button" aria-label="查看 ${esc(p.t)}">
+        <div class="gp-thumb"${thumbStyle}><img src="${safeUrl(src)}" alt="${esc(p.t)}" loading="lazy" decoding="async"></div>
         <div class="gp-card-foot">
           <div class="gp-card-title-row"><span class="gp-num-inline">${String(i+1).padStart(2,'0')}</span><span class="gp-card-title">${esc(p.t)}</span><span class="gp-card-arrow" aria-hidden="true">↗</span></div>
-          ${ExifCard.compact(p.exif||g.exif||'')||'<span class="gp-noex">相机参数未识别</span>'}
+          ${ExifCard.compact(rawExif,{skipHead})||'<span class="gp-noex">相机参数未识别</span>'}
         </div>
-      </figure>`).join('');
+      </figure>`;
+    }).join('');
     Motion.observe(this.previews);
-    /* 图片懒加载动画 */
-    this.previews.querySelectorAll('img').forEach(img=>{
+    /* 图片懒加载动画 + 写回自然纵横比 */
+    this.previews.querySelectorAll('img').forEach((img,idx)=>{
       const fit=()=>{
         img.classList.add('loaded');
         const box=img.closest('.gp-thumb');
         if(box&&img.naturalWidth&&img.naturalHeight){
-          const ratio=Math.max(.72,Math.min(1.65,img.naturalWidth/img.naturalHeight));
+          const nat=img.naturalWidth/img.naturalHeight;
+          RatioStore.set(photos[idx],img.getAttribute('src')||'',nat);
+          const ratio=Math.max(.72,Math.min(1.65,nat));
           box.style.aspectRatio=ratio.toFixed(3);
         }
       };
@@ -1538,6 +1826,12 @@ const GroupPage={
 /* ─── EXIF 参数矩阵:把 "机身 · 镜头<br>56mm · f/1.4 · 1/500s · ISO 320" 结构化为光学仪表盘 ─── */
 /* 解析失败或字段缺失时自动退化为原文显示,任何输入都不丢信息 */
 const ExifCard={
+  parts(html){
+    if(!html)return {head:'',body:''};
+    const lines=String(html).split(/<br\s*\/?>/i).map(l=>l.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
+    if(!lines.length)return {head:'',body:''};
+    return {head:lines.length>1?lines[0]:'',body:lines[lines.length>1?1:0]};
+  },
   render(html){
     if(!html)return '';
     const lines=String(html).split(/<br\s*\/?>/i).map(l=>l.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
@@ -1564,15 +1858,15 @@ const ExifCard={
       (note?`<div class="exm-note">${esc(note)}</div>`:'');
   },
   /* 紧凑版:首行=机身·镜头(相机型号),其余=参数。用于组详情页每张图下方的独立小卡片 */
-  compact(html){
-    if(!html)return '';
-    const lines=String(html).split(/<br\s*\/?>/i).map(l=>l.replace(/<[^>]*>/g,'').trim()).filter(Boolean);
-    if(!lines.length)return '';
-    const head=lines.length>1?esc(lines[0]):'';          /* 有多行:首行为机身·镜头 */
-    const body=esc(lines[lines.length>1?1:0]);            /* 参数行 */
-    return `<div class="gp-exif-cap" title="${head||body}">`+
-      (head?`<span class="gp-ph">${head}</span>`:'')+
-      `<span class="gp-pb">${body}</span></div>`;
+  compact(html,opt){
+    const {head,body}=this.parts(html);
+    if(!head&&!body)return '';
+    const skipHead=Boolean(opt&&opt.skipHead);
+    const eHead=(!skipHead&&head)?esc(head):'';
+    const eBody=esc(body);
+    return `<div class="gp-exif-cap" title="${eHead||eBody}">`+
+      (eHead?`<span class="gp-ph">${eHead}</span>`:'')+
+      `<span class="gp-pb">${eBody}</span></div>`;
   }
 };
 
@@ -1583,39 +1877,40 @@ const SaveHint={
     this.close();
     const ov=document.createElement('div');
     ov.id='saveHint';
+    ov.className='save-hint-mask';
     ov.setAttribute('role','dialog');ov.setAttribute('aria-modal','true');ov.setAttribute('aria-label','保存原图');
-    ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:9000;background:rgba(8,6,14,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+    const card=document.createElement('div');
+    card.className='save-hint-box';
     const title=document.createElement('div');
-    title.textContent='保 存 原 图';
-    title.style.cssText='font-size:14px;font-weight:600;color:#fff;letter-spacing:.22em;margin-bottom:14px';
+    title.textContent='保存原图';
+    title.style.cssText='font:400 18px/1.35 var(--serif);color:var(--text)';
     const box=document.createElement('div');
-    box.style.cssText='max-width:92vw;max-height:60vh;display:flex;align-items:center;justify-content:center';
+    box.style.cssText='min-height:140px;display:flex;align-items:center;justify-content:center;margin-top:12px';
     const spin=document.createElement('div');
     spin.textContent='原图加载中 …';
-    spin.style.cssText='font-family:var(--mono);font-size:11px;color:rgba(253,252,250,.55);letter-spacing:.1em;padding:70px 36px;border:1px dashed rgba(255,255,255,.22);border-radius:12px';
+    spin.style.cssText='font:12px/1.4 var(--mono);color:var(--muted);padding:48px 24px;border:1px dashed var(--border-strong);border-radius:var(--image-radius);background:var(--surface-subtle);width:100%';
     const img=document.createElement('img');
+    img.className='save-hint-img';
     img.alt='长按这张图片即可保存';
     img.referrerPolicy='no-referrer';
-    img.style.cssText='display:none;max-width:92vw;max-height:60vh;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,.12)';
-    img.onload=()=>{spin.style.display='none';img.style.display='block';tip.textContent='请长按上方图片 → 菜单中选「保存图片」';tip.style.animation='none'};
+    img.style.display='none';
+    img.onload=()=>{spin.style.display='none';img.style.display='block';tip.textContent='请长按上方图片 → 在菜单中选择「保存图片」';};
     img.onerror=()=>{
       if(fallbackUrl&&fallbackUrl!==url){const fallback=fallbackUrl;fallbackUrl=null;img.src=fallback}
-      else{spin.textContent='原图加载失败,请点下方按钮打开'}
+      else{spin.textContent='原图加载失败，请点下方按钮打开'}
     };
     img.src=url;
     box.appendChild(spin);box.appendChild(img);
     const tip=document.createElement('p');
-    tip.textContent='正在加载原图,请稍候 …';
-    tip.style.cssText='margin-top:16px;font-size:13px;color:rgba(253,252,250,.9);text-align:center;line-height:1.9;letter-spacing:.05em;animation:savePulse 1.5s ease-in-out infinite';
+    tip.textContent='正在加载原图，请稍候 …';
+    tip.style.cssText='margin:8px 0 0;font-size:12.5px;color:var(--muted);line-height:1.7';
     const row=document.createElement('div');
-    row.style.cssText='display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:16px;max-width:92vw';
+    row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px';
     const mkBtn=(txt,primary)=>{
       const b=document.createElement('button');
+      b.type='button';
+      b.className='admin-btn'+(primary?' admin-btn-primary':'');
       b.textContent=txt;
-      b.style.cssText='padding:10px 20px;border-radius:999px;font-size:12px;letter-spacing:.1em;'+
-        (primary
-          ?'background:linear-gradient(135deg,var(--coral),var(--apricot));color:#fff;border:1px solid transparent'
-          :'background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.22)');
       return b;
     };
     /* 新窗口打开原图:微信/QQ 会用自带图片查看器打开(里面同样可长按保存) */
@@ -1639,10 +1934,12 @@ const SaveHint={
       };
       row.appendChild(dlBtn);
     }
-    const closeBtn=mkBtn('关 闭');
+    const closeBtn=mkBtn('关闭');
     closeBtn.onclick=()=>this.close();
     row.appendChild(closeBtn);
-    ov.appendChild(title);ov.appendChild(box);ov.appendChild(tip);ov.appendChild(row);
+    card.appendChild(title);card.appendChild(box);card.appendChild(tip);card.appendChild(row);
+    ov.addEventListener('click',e=>{if(e.target===ov)this.close()});
+    ov.appendChild(card);
     document.body.appendChild(ov);
     Dialogs.register(ov,()=>this.close());
   },
@@ -1650,7 +1947,7 @@ const SaveHint={
 };
 
 const Lightbox={
-  el:null,img:null,g:null,cur:0,
+  el:null,img:null,g:null,cur:0,_opener:null,_qTimer:0,_adjTimer:0,_sidebarCollapsed:false,
   init(){
     this.el=$('#lightbox');
     const UA=navigator.userAgent||'';
@@ -1662,10 +1959,11 @@ const Lightbox={
     }
     this.img=$('#lbImg');
     $('#lbClose').addEventListener('click',()=>this.close());
+    $('#lbToggleSide')?.addEventListener('click',()=>this.toggleSidebar());
     $('#lbPrev').addEventListener('click',()=>this.step(-1));
     $('#lbNext').addEventListener('click',()=>this.step(1));
     this.el.addEventListener('click',e=>{
-      if(e.target===this.el||e.target.classList.contains('lb-stage'))this.close();
+      if(e.target===this.el)this.close();
     });
     addEventListener('keydown',e=>{
       if(!this.el.classList.contains('open'))return;
@@ -1716,14 +2014,27 @@ const Lightbox={
     });
     this.initZoom();
   },
-  /* ─── 手势:双指缩放 · 双击放大 · 放大后单指平移 · 未放大横滑翻页 ─── */
+  setSidebarCollapsed(collapsed){
+    this._sidebarCollapsed=!!collapsed;
+    this.el.classList.toggle('is-sidebar-collapsed',this._sidebarCollapsed);
+    this.el.querySelector('.lb-inner')?.classList.toggle('is-sidebar-collapsed',this._sidebarCollapsed);
+    const btn=$('#lbToggleSide');
+    if(btn){
+      btn.setAttribute('aria-expanded',String(!this._sidebarCollapsed));
+      btn.textContent=this._sidebarCollapsed?'显示边栏':'隐藏边栏';
+    }
+  },
+  toggleSidebar(){
+    this.setSidebarCollapsed(!this._sidebarCollapsed);
+  },
+  /* ─── 手势:双指缩放 · 双击放大 · 放大后平移(触控与桌面拖拽) · 未放大横滑翻页 ─── */
   /* 纯 transform 实现,不触碰 src,不拦截长按(长按保存原图链路不受影响) */
   initZoom(){
     const st=this.el.querySelector('.lb-stage');
     if(!st||this._zoomBound)return;
     this._zoomBound=true;
     const img=this.img;
-    let s=1,x=0,y=0,mode=0,sx=0,sy=0,ox=0,oy=0,pd=0,ps=1,t0x=0,t0y=0,moved=false,lastT=0,lastX=0,lastY=0;
+    let s=1,x=0,y=0,mode=0,sx=0,sy=0,ox=0,oy=0,pd=0,ps=1,t0x=0,t0y=0,moved=false,lastT=0,lastX=0,lastY=0,dragging=false;
     const clamp=()=>{
       if(s<=1){s=1;x=0;y=0;return}
       const mx=Math.max(0,img.offsetWidth*(s-1)/2),my=Math.max(0,img.offsetHeight*(s-1)/2);
@@ -1732,8 +2043,15 @@ const Lightbox={
     const apply=anim=>{
       img.style.transition=anim?'transform .35s cubic-bezier(.22,1,.36,1)':'';
       img.style.transform=s>1?'translate('+x+'px,'+y+'px) scale('+s+')':'';
+      st.classList.toggle('is-zoomed',s>1);
+      img.classList.toggle('is-zoomed',s>1);
+      img.style.cursor=s>1?(dragging?'grabbing':'grab'):'';
     };
-    this._zoomReset=()=>{s=1;x=0;y=0;apply(true)};
+    this._zoomReset=()=>{
+      s=1;x=0;y=0;dragging=false;
+      st.classList.remove('is-dragging');img.classList.remove('is-dragging');
+      apply(true);
+    };
     const zoomAt=(k,cx,cy)=>{          /* 以视口点为锚缩放 */
       const r=img.getBoundingClientRect();
       x+=(cx-(r.left+r.width/2))*(1-k);
@@ -1778,7 +2096,27 @@ const Lightbox={
       }
       if(!e.touches.length)mode=0;
     });
-    /* 桌面:滚轮缩放 + 双击放大(触屏设备交给 touch,避免双触发) */
+    /* 桌面:滚轮缩放 + 双击放大 + 放大后鼠标拖拽平移 */
+    st.addEventListener('mousedown',e=>{
+      if(s<=1||e.button!==0||e.target.closest('button'))return;
+      e.preventDefault();
+      dragging=true;sx=e.clientX;sy=e.clientY;ox=x;oy=y;
+      st.classList.add('is-dragging');img.classList.add('is-dragging');
+      apply(false);
+    });
+    addEventListener('mousemove',e=>{
+      if(!dragging)return;
+      x=ox+(e.clientX-sx);y=oy+(e.clientY-sy);
+      clamp();apply(false);
+    });
+    const endDrag=()=>{
+      if(!dragging)return;
+      dragging=false;
+      st.classList.remove('is-dragging');img.classList.remove('is-dragging');
+      apply(false);
+    };
+    addEventListener('mouseup',endDrag);
+    addEventListener('blur',endDrag);
     if(!('ontouchstart' in window)){
       st.addEventListener('wheel',e=>{
         e.preventDefault();
@@ -1789,37 +2127,71 @@ const Lightbox={
       });
     }
   },
+  _exitFocusTarget(){
+    const opener=this._opener;
+    if(!opener||opener.closest?.('.river-tile'))return opener;
+    if(!this.g)return opener;
+    if(opener.closest?.('#gpPreviews .gp-preview-item[data-idx]')&&GroupPage.el&&!GroupPage.el.hidden&&GroupPage.g===this.g){
+      return GroupPage.previews?.querySelector(`.gp-preview-item[data-idx="${this.cur}"]`)||opener;
+    }
+    const proof=opener.closest?.('.proof[data-day][data-proof-idx]');
+    if(proof&&proof.dataset.day===this.g.d&&!$('#archive').hidden){
+      const match=document.querySelector(`.proof[data-day="${CSS.escape(this.g.d)}"][data-proof-idx="${this.cur}"]`);
+      return match||opener;
+    }
+    return opener;
+  },
   open(g,idx){
+    this._opener=document.activeElement;
+    delete this.el.dataset.closing;
     this.g=g;
     this.cur=idx||0;
     this.paint();
     this.el.hidden=false;
     this.el.classList.add('open');
-    document.body.style.overflow='hidden';
+    Dialogs?.sync?.();
     Motion.present(this.el);
   },
   close(){
-    if(this.el.hidden)return;
+    if(this.el.hidden||this.el.dataset.closing==='true')return;
+    Social.saveDraft();
+    clearTimeout(this._qTimer);
+    clearTimeout(this._adjTimer);
+    const target=this._exitFocusTarget();
+    this.el.dataset.closing='true';
+    Dialogs?.sync?.();
+    if(target&&target!==this._opener&&target.isConnected&&target.getClientRects().length){
+      target.focus({preventScroll:true});
+    }
     Motion.dismiss(this.el,()=>this.finishClose());
   },
   finishClose(){
+    delete this.el.dataset.closing;
     this.el.classList.remove('open');
     this.el.hidden=true;
+    clearTimeout(this._qTimer);
+    clearTimeout(this._adjTimer);
+    $('#lbQuality')?.classList.remove('is-faded');
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
     this.img.onload=null;
-    document.body.style.overflow='';
+    this.setSidebarCollapsed(false);
     if(this._zoomReset)this._zoomReset();
+    this._opener=null;
+    Dialogs?.sync?.();
   },
   step(d){this.cur=(this.cur+d+this.g.gs.length)%this.g.gs.length;this.paint()},
   /* 原图就绪角标:告知用户当前长按/另存拿到的是预览还是原图 */
   _q(txt,cls){
     const el=$('#lbQuality');
     if(!el)return;
+    clearTimeout(this._qTimer);
     el.textContent=txt;
     el.className='lb-quality '+(cls||'');
   },
   paint(){
     const g=this.g,p=g.gs[this.cur];
+    clearTimeout(this._qTimer);
+    clearTimeout(this._adjTimer);
     this.img.onload=null;
     if(this._zoomReset)this._zoomReset();     /* 换图先复位缩放 */
     this.img.alt=p.t;
@@ -1835,7 +2207,7 @@ const Lightbox={
     Social.bind(g,p);
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
     const generation=(this._imageGeneration||0)+1;this._imageGeneration=generation;
-    const stale=()=>this._imageGeneration!==generation||this.g!==g||this.g.gs[this.cur]!==p||this.el.hidden;
+    const stale=()=>this._imageGeneration!==generation||this.g!==g||this.g.gs[this.cur]!==p||this.el.hidden||this.el.dataset.closing==='true';
     const view=pView(p),small=pURL(p,Thumb.SMALL),hasPreview=!!(p.tn&&(p.tn.s||p.tn.v));
     let smallFailed=false,viewFailed=false;
     this.img.onerror=()=>{
@@ -1846,7 +2218,14 @@ const Lightbox={
     this.img.onload=()=>{
       if(stale())return;
       this.img.parentElement.classList.remove('image-error');
+      if(this.img.naturalWidth&&this.img.naturalHeight){
+        RatioStore.set(p,this.img.getAttribute('src')||view,this.img.naturalWidth/this.img.naturalHeight);
+      }
       this._q(hasPreview?'高清预览 · 原图请点下载':'这张作品暂未生成预览，正在显示原图','ready');
+      clearTimeout(this._qTimer);
+      this._qTimer=setTimeout(()=>{
+        if(!stale())$('#lbQuality')?.classList.add('is-faded');
+      },1800);
     };
     this.img.src=small;this._q('作品载入中…','load');
     if(view!==small){
@@ -1854,6 +2233,17 @@ const Lightbox={
       pre.onload=()=>{if(!stale())this.img.src=view};
       pre.onerror=()=>{viewFailed=true;if(!stale())this._q(smallFailed?'预览暂不可用，请下载原图或稍后重试':'高清预览暂不可用，正在显示缩略图','load')};
       pre.src=view;
+    }
+    if(g.gs.length>1){
+      this._adjTimer=setTimeout(()=>{
+        if(stale())return;
+        const urls=new Set();
+        for(const off of [1,-1]){
+          const adj=g.gs[(this.cur+off+g.gs.length)%g.gs.length];
+          const u=adj&&adj!==p?pView(adj):'';
+          if(u&&u!==view&&!urls.has(u)){urls.add(u);new Image().src=u;}
+        }
+      },60);
     }
 
   }
@@ -2009,7 +2399,44 @@ const Player={
 
 /* ─── 管理面板:COS 密钥保存 + 照片直传 ─── */
 const Admin={
-  el:null,cos:null,_exifs:null,
+  el:null,cos:null,_exifs:null,_exifPreviewUrls:[],_mgQuery:'',_mgOpen:new Set(),_mgInitOpen:false,
+  clearExifPreviews(){
+    if(this._exifPreviewUrls&&this._exifPreviewUrls.length){
+      this._exifPreviewUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch(e){}});
+      this._exifPreviewUrls=[];
+    }
+  },
+  clearInlineConfirm(){
+    this.el?.querySelectorAll('.mg-confirm-bar').forEach(el=>el.remove());
+  },
+  confirmInline(host,msg,yesLabel,onConfirm,anchor){
+    this.clearInlineConfirm();
+    if(!host){return}
+    const bar=document.createElement('div');
+    bar.className='mg-confirm-bar inline-confirm';
+    bar.setAttribute('role','region');
+    bar.setAttribute('aria-label','确认操作');
+    bar.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding:10px 12px;width:100%';
+    const text=document.createElement('span');
+    text.style.cssText='flex:1 1 220px;white-space:pre-line';
+    text.textContent=msg;
+    const yes=document.createElement('button');
+    yes.type='button';yes.className='mg-btn danger';yes.textContent=yesLabel||'确认';
+    const no=document.createElement('button');
+    no.type='button';no.className='mg-btn';no.textContent='取消';
+    no.addEventListener('click',()=>{
+      bar.remove();
+      if(anchor&&anchor.isConnected)anchor.focus({preventScroll:true});
+    });
+    yes.addEventListener('click',async()=>{
+      yes.disabled=true;no.disabled=true;
+      bar.remove();
+      await onConfirm();
+    });
+    bar.appendChild(text);bar.appendChild(yes);bar.appendChild(no);
+    host.appendChild(bar);
+    no.focus({preventScroll:true});
+  },
   init(){
     this.el=$('#adminPanel');
     $('#adminClose').addEventListener('click',()=>this.close());
@@ -2044,24 +2471,47 @@ const Admin={
     $('#musicUpload').addEventListener('click',()=>this.uploadMusic());
     /* 选照片后自动识别 EXIF 相机参数 */
     $('#afFiles').addEventListener('change',()=>this.autofillExif());
-    /* 已上传照片管理:载入 + 列表事件委托(删/换/介绍失焦保存/缩略图新标签打开) */
+    /* 已上传照片管理:载入 + 列表事件委托(删/换/展开/搜索/介绍失焦保存/缩略图新标签打开) */
     $('#manageLoad').addEventListener('click',()=>this.loadManage());
     const tnBtn=$('#tnFixBtn');
     if(tnBtn&&!tnBtn.dataset.bound){tnBtn.dataset.bound='1';tnBtn.addEventListener('click',()=>this.tnRebuild())}
     const orBtn=$('#orphanBtn');
     if(orBtn&&!orBtn.dataset.bound){orBtn.dataset.bound='1';orBtn.addEventListener('click',()=>this.orphanRebuild())}
     const mg=$('#mgList');
+    mg.addEventListener('input',ev=>{
+      if(ev.target.id==='mgSearch'){
+        this._mgQuery=ev.target.value;
+        this.renderManage();
+      }
+    });
     mg.addEventListener('click',ev=>{
+      if(ev.target.dataset.act==='mg-clear-search'){
+        this._mgQuery='';
+        const inp=$('#mgSearch');if(inp)inp.value='';
+        this.renderManage();
+        inp?.focus({preventScroll:true});
+        return;
+      }
       const b=ev.target.closest('.mg-btn,.mg-thumb');
       if(!b)return;
       if(b.dataset.act==='open'){window.open(this.cosURL(b.dataset.k),'_blank','noopener');return}
       const act=b.dataset.act;
-      if(act==='del'){
+      if(act==='gtoggle'){
+        const gsec=b.closest('.mg-group');
+        const body=gsec?.querySelector('.mg-group-body');
+        const d=gsec?.dataset.d;
+        if(!gsec||!body||!d)return;
+        const next=body.hidden;
+        if(next)this._mgOpen.add(d);else this._mgOpen.delete(d);
+        body.hidden=!next;
+        b.setAttribute('aria-expanded',String(next));
+        b.textContent=next?'收起':'展开';
+      }else if(act==='del'){
         const ph=b.closest('.mg-ph');
-        this.mgDelete(ph.dataset.d,+ph.dataset.i);
+        this.mgDelete(ph.dataset.d,+ph.dataset.i,b);
       }else if(act==='gdel'){
         const gsec=b.closest('.mg-group');
-        this.mgDeleteGroup(gsec.dataset.d);
+        this.mgDeleteGroup(gsec.dataset.d,b);
       }
     });
     mg.addEventListener('change',ev=>{
@@ -2111,6 +2561,7 @@ const Admin={
   },
   /* 选片后:逐张识别并逐行展示每张各自的相机参数(参数按单张保存,不再整组共用) */
   async autofillExif(){
+    this.clearExifPreviews();
     const files=[...($('#afFiles').files||[])];
     const list=$('#afExifList');
     if(!files.length){list.hidden=true;list.innerHTML='';this._exifs=null;this.status();return}
@@ -2121,15 +2572,28 @@ const Admin={
     const isHeic=f=>f.type==='image/heic'||f.type==='image/heif'||/\.hei[cf]$/i.test(f.name||'');
     const nHeic=files.filter(isHeic).length;
     list.hidden=false;
-    list.innerHTML=files.map((f,i)=>`
+    list.innerHTML=files.map((f,i)=>{
+      let thumbHtml='';
+      if(!isHeic(f)&&typeof URL!=='undefined'&&URL.createObjectURL){
+        const u=URL.createObjectURL(f);
+        this._exifPreviewUrls.push(u);
+        thumbHtml=`<img class="af-preview-thumb" src="${safeUrl(u)}" alt="" width="48" height="48">`;
+      }else{
+        thumbHtml='<span class="af-preview-thumb" style="display:grid;place-items:center;font:11px var(--mono);color:var(--muted)">HEIC</span>';
+      }
+      return `
       <div class="af-exif-row">
-        <div class="af-exif-line">
-          <span class="af-exif-num">${String(i+1).padStart(2,'0')}</span>
-          <span class="af-exif-file" title="${esc(f.name)}">${esc(f.name)}</span>
-          <span class="af-exif-val${this._exifs[i]?'':' none'}">${isHeic(f)?'<span class="af-warn">HEIC · 多数浏览器无法显示,建议相册转 JPG 后再传</span><br>':''}${this._exifs[i]?esc(this._exifs[i].replace(/<br>/g,' · ')):'未识别 · 将显示整组默认'}</span>
+        ${thumbHtml}
+        <div style="flex:1;min-width:0">
+          <div class="af-exif-line">
+            <span class="af-exif-num">${String(i+1).padStart(2,'0')}</span>
+            <span class="af-exif-file" title="${esc(f.name)}">${esc(f.name)}</span>
+            <span class="af-exif-val${this._exifs[i]?'':' none'}">${isHeic(f)?'<span class="af-warn">HEIC · 多数浏览器无法显示,建议相册转 JPG 后再传</span><br>':''}${this._exifs[i]?esc(this._exifs[i].replace(/<br>/g,' · ')):'未识别 · 将显示整组默认'}</span>
+          </div>
+          <textarea class="af-desc" data-i="${i}" rows="2" maxlength="180" placeholder="给这张照片写句介绍(可选) · 会显示在悬浮窗里"></textarea>
         </div>
-        <textarea class="af-desc" data-i="${i}" rows="2" maxlength="180" placeholder="给这张照片写句介绍(可选) · 会显示在悬浮窗里"></textarea>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     let m=`已选 ${files.length} 张 · `;
     if(nHeic)m+=`<span class="no">${nHeic} 张为 HEIC 格式(建议转 JPG)</span> · `;
     this.status(m+(n?`识别到 ${n} 张的参数,将按单张分别保存`:'未识别到参数(可能非 JPEG 或已被压缩去除),可填写整组默认'),n?'ok':'no');
@@ -2179,7 +2643,6 @@ const Admin={
   open(){
     if(!this.el)return;
     this.el.hidden=false;
-    document.body.style.overflow='hidden';
     this.status();
     location.hash='#admin';
     /* 打开面板后台预取 COS SDK:等站主填好表单时已经就绪,首次上传无需等待下载 */
@@ -2410,8 +2873,8 @@ const Admin={
 
   close(){
     if(!this.el)return;
+    this.clearInlineConfirm();
     this.el.hidden=true;
-    document.body.style.overflow='';
     if(location.hash==='#admin')history.replaceState(null,'',location.pathname+location.search);
   },
   /* 按需加载 COS SDK:SDK 有 156KB,而访客完全用不到(只有站主上传照片才需要),
@@ -2480,6 +2943,7 @@ const Admin={
     const box=$('#mgList'),btn=$('#manageLoad');
     btn.disabled=true;btn.textContent='载入中…';
     box.hidden=false;box.innerHTML='<div class="mg-empty">正在读取云端归档 …</div>';
+    this._mgInitOpen=false;
     try{
       const data=await readCatalog('data.json','groups');
       this.mgData=data;
@@ -2500,9 +2964,39 @@ const Admin={
        要在管理面板里能看到它的介绍输入框并管理)。仅含旧式非 COS 照片的组与演示数据一样不显示 */
     const gs=data.groups.filter(g=>!g.gs||g.gs.length===0||g.gs.some(p=>p.k));
     if(!gs.length){box.innerHTML='<div class="mg-empty">云端归档里没有已上传的照片(当前为演示数据)</div>';return}
-    box.innerHTML=gs.map(g=>{
+    if(!this._mgInitOpen){
+      this._mgOpen=new Set();
+      gs.slice(0,gs.length>3?2:gs.length).forEach(g=>this._mgOpen.add(g.d));
+      this._mgInitOpen=true;
+    }
+    if(!$('#mgGroups')){
+      box.innerHTML=`
+        <div class="mg-toolbar mg-search-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <input type="search" id="mgSearch" class="sb-input mg-search" style="flex:1 1 220px" value="${esc(this._mgQuery||'')}" placeholder="搜索组名、地点、日期或作品名…" aria-label="搜索已上传作品">
+          <span id="mgCount" style="font:12px/1 var(--mono);color:var(--muted)"></span>
+        </div>
+        <div id="mgGroups"></div>`;
+    }
+    const q=(this._mgQuery||'').trim().toLowerCase();
+    const filtered=q?gs.filter(g=>{
+      const gMatch=[g.d,g.title,g.loc,g.c].some(v=>String(v||'').toLowerCase().includes(q));
+      if(gMatch)return true;
+      return (g.gs||[]).some(p=>p.k&&[p.t,p.d,p.exif].some(v=>String(v||'').toLowerCase().includes(q)));
+    }):gs;
+    const cnt=$('#mgCount');
+    if(cnt)cnt.textContent=q?`匹配 ${filtered.length} / ${gs.length} 组`:`共 ${gs.length} 组`;
+    const groupsEl=$('#mgGroups');
+    if(!groupsEl)return;
+    if(!filtered.length){
+      groupsEl.innerHTML='<div class="mg-empty">没有匹配的作品或分组 <button type="button" class="mg-btn" data-act="mg-clear-search" style="margin-left:8px">清空搜索</button></div>';
+      return;
+    }
+    groupsEl.innerHTML=filtered.map(g=>{
+      const gMatch=!q||[g.d,g.title,g.loc,g.c].some(v=>String(v||'').toLowerCase().includes(q));
+      const open=Boolean(q)||this._mgOpen.has(g.d);
       const photos=(g.gs||[]).map((p,i)=>{
         if(!p.k)return '';
+        if(q&&!gMatch&&![p.t,p.d,p.exif].some(v=>String(v||'').toLowerCase().includes(q)))return '';
         const ex=(p.exif||'').replace(/<br>/g,' · ');
         return `
         <div class="mg-ph" data-d="${esc(g.d)}" data-i="${i}">
@@ -2535,9 +3029,12 @@ const Admin={
           <span class="mg-g-title">${esc(g.title||'')}</span>
           <span>${esc(g.loc||'')}</span>
           <span>${n?n+'/'+g.gs.length+' 张':'空分组'}</span>
-          <span class="mg-g-act"><button type="button" class="mg-btn danger" data-act="gdel">删除整组</button></span>
+          <span class="mg-g-act" style="display:flex;gap:8px;align-items:center">
+            <button type="button" class="mg-btn mg-g-toggle" data-act="gtoggle" aria-expanded="${open?'true':'false'}">${open?'收起':'展开'}</button>
+            <button type="button" class="mg-btn danger" data-act="gdel">删除整组</button>
+          </span>
         </div>
-        ${empty}
+        <div class="mg-group-body"${open?'':' hidden'}>${empty}</div>
       </div>`;
     }).join('');
   },
@@ -2595,36 +3092,40 @@ const Admin={
       }
     };
     await Promise.all(Array.from({length:CONC},worker));
-    /* 3. 摘掉失效记录 */
+    /* 3. 摘掉失效记录(改为非阻塞内联确认) */
     if(!missing.length){
       this.status(`检查完成:${targets.length} 张照片的云端文件都在,没有失效记录`,'ok');
       btn.disabled=false;btn.textContent='重新检查';
       return;
     }
-    if(!confirm(`发现 ${missing.length} 张照片的云端文件已不存在,但列表里还留着(访客会看到破图)。\n\n现在把这些失效记录从列表里清理掉吗?\n(只改列表数据,不会删除任何文件)`)) {
-      btn.disabled=false;btn.textContent='重新检查';
-      return;
-    }
-    /* 按组处理:从后往前删,避免索引错位 */
-    const byGroup=new Map();
-    missing.forEach(t=>{
-      if(!byGroup.has(t.g))byGroup.set(t.g,[]);
-      byGroup.get(t.g).push(t.i);
-    });
-    let removed=0;
-    byGroup.forEach((idxs,g)=>{
-      idxs.sort((a,b)=>b-a).forEach(i=>{g.gs.splice(i,1);removed++});
-      /* 只移除"因这次清理而变空"的组;本来就是空的组(只有介绍和留言)保留 */
-      if(!g.gs.length)data.groups=data.groups.filter(x=>x!==g);
-    });
-    try{
-      await this.mgSave(`已清理 ${removed} 条失效记录`);
-    }catch(e){
-      this.status('清理失败:'+((e&&e.message)||'请检查网络'),'no');
-    }
     btn.disabled=false;btn.textContent='重新检查';
-    this.renderManage();
-    this.orphanScan();
+    this.confirmInline(
+      $('#orphanBox')||btn.parentElement,
+      `发现 ${missing.length} 张照片的云端文件已不存在，列表中仍留有失效记录（只清理列表，不会删除任何文件）。`,
+      '确认清理失效记录',
+      async()=>{
+        btn.disabled=true;
+        const byGroup=new Map();
+        missing.forEach(t=>{
+          if(!byGroup.has(t.g))byGroup.set(t.g,[]);
+          byGroup.get(t.g).push(t.i);
+        });
+        let removed=0;
+        byGroup.forEach((idxs,g)=>{
+          idxs.sort((a,b)=>b-a).forEach(i=>{g.gs.splice(i,1);removed++});
+          if(!g.gs.length)data.groups=data.groups.filter(x=>x!==g);
+        });
+        try{
+          await this.mgSave(`已清理 ${removed} 条失效记录`);
+        }catch(e){
+          this.status('清理失败:'+((e&&e.message)||'请检查网络'),'no');
+        }
+        btn.disabled=false;btn.textContent='重新检查';
+        this.renderManage();
+        this.orphanScan();
+      },
+      btn
+    );
   },
   /* ─── 老照片补预览图 ───
      早期上传的照片没有压缩版,访客浏览会下原图(12~20MB)导致卡顿。
@@ -2659,52 +3160,59 @@ const Admin={
       (g.gs||[]).forEach((p,i)=>{if(p.k&&!(p.tn&&p.tn.s))todo.push({g,p,i})});
     });
     if(!todo.length){this.status('没有需要处理的照片','ok');return}
-    if(!confirm(`将为 ${todo.length} 张照片生成并上传预览图。\n\n原图不会被修改或删除,只是额外存两个小版本。\n过程中请保持页面打开,不要关闭。\n\n开始吗?`))return;
     const btn=$('#tnFixBtn');
-    btn.disabled=true;
-    const t0=Date.now();
-    let done=0,fail=0,savedKB=0;
-    for(const item of todo){
-      const {g,p,i}=item;
-      btn.textContent=`处理中 ${done+fail+1}/${todo.length} …`;
-      this.status(`正在生成预览图 ${done+fail+1}/${todo.length} · ${p.t||''}`);
-      try{
-        /* 1. 下载原图(带 crossOrigin 才能进 canvas 导出) */
-        const url=cosURL(p.k);
-        const resp=await fetchWithTimeout(url,{mode:'cors'},30000);
-        if(!resp.ok)throw new Error('原图下载失败 '+resp.status);
-        const srcBlob=await resp.blob();
-        /* 2. 压成两档并上传 */
-        const smallBlob=await Thumb.make(srcBlob,Thumb.SMALL,Thumb.Q_SMALL);
-        const smallKey=Thumb.key(p.k,Thumb.SMALL);
-        await this.put(smallKey,smallBlob);
-        const viewBlob=await Thumb.make(srcBlob,Thumb.VIEW,Thumb.Q_VIEW);
-        const viewKey=Thumb.key(p.k,Thumb.VIEW);
-        await this.put(viewKey,viewBlob);
-        /* 3. 记录小图 key(原图与小图大小对比,用于展示省了多少流量) */
-        p.tn={s:smallKey,v:viewKey};
-        savedKB+=Math.max(0,(srcBlob.size-smallBlob.size)/1024);
-        done++;
-      }catch(e){
-        fail++;
-        console.warn('预览图生成失败:',p.k,e&&e.message);
-      }
-      /* 每张处理完就写回一次,中途中断也不会全部白做 */
-      if(done%3===0||done+fail===todo.length){
-        try{await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}))}catch(e){}
-      }
-    }
-    /* 最终写回 + 刷新访客端数据 */
-    try{
-      await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
-      await Bus.emit('archive:reload');
-    }catch(e){}
-    const sec=Math.round((Date.now()-t0)/1000);
-    this.status(`预览图完成:成功 ${done} 张${fail?` · <span class="no">失败 ${fail} 张(可重试)</span>`:''} · 耗时 ${sec} 秒<br>访客端每次浏览约省下 <span class="ok">${Math.round(savedKB/1024)} MB</span> 流量,照片打开速度大幅提升`,fail?'no':'ok');
-    btn.disabled=false;
-    btn.textContent='重新检测';
-    this.tnScan();
-    this.renderManage();
+    this.confirmInline(
+      $('#tnFixBox')||btn.parentElement,
+      `将为 ${todo.length} 张照片生成并上传两个压缩版本（原图不会被修改或删除，过程中请保持页面打开）。`,
+      '开始生成预览',
+      async()=>{
+        btn.disabled=true;
+        const t0=Date.now();
+        let done=0,fail=0,savedKB=0;
+        for(const item of todo){
+          const {g,p,i}=item;
+          btn.textContent=`处理中 ${done+fail+1}/${todo.length} …`;
+          this.status(`正在生成预览图 ${done+fail+1}/${todo.length} · ${p.t||''}`);
+          try{
+            /* 1. 下载原图(带 crossOrigin 才能进 canvas 导出) */
+            const url=cosURL(p.k);
+            const resp=await fetchWithTimeout(url,{mode:'cors'},30000);
+            if(!resp.ok)throw new Error('原图下载失败 '+resp.status);
+            const srcBlob=await resp.blob();
+            /* 2. 压成两档并上传 */
+            const smallBlob=await Thumb.make(srcBlob,Thumb.SMALL,Thumb.Q_SMALL);
+            const smallKey=Thumb.key(p.k,Thumb.SMALL);
+            await this.put(smallKey,smallBlob);
+            const viewBlob=await Thumb.make(srcBlob,Thumb.VIEW,Thumb.Q_VIEW);
+            const viewKey=Thumb.key(p.k,Thumb.VIEW);
+            await this.put(viewKey,viewBlob);
+            /* 3. 记录小图 key(原图与小图大小对比,用于展示省了多少流量) */
+            p.tn={s:smallKey,v:viewKey};
+            savedKB+=Math.max(0,(srcBlob.size-smallBlob.size)/1024);
+            done++;
+          }catch(e){
+            fail++;
+            console.warn('预览图生成失败:',p.k,e&&e.message);
+          }
+          /* 每张处理完就写回一次,中途中断也不会全部白做 */
+          if(done%3===0||done+fail===todo.length){
+            try{await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}))}catch(e){}
+          }
+        }
+        /* 最终写回 + 刷新访客端数据 */
+        try{
+          await this.put('data.json',new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));
+          await Bus.emit('archive:reload');
+        }catch(e){}
+        const sec=Math.round((Date.now()-t0)/1000);
+        this.status(`预览图完成:成功 ${done} 张${fail?` · <span class="no">失败 ${fail} 张(可重试)</span>`:''} · 耗时 ${sec} 秒<br>访客端每次浏览约省下 <span class="ok">${Math.round(savedKB/1024)} MB</span> 流量,照片打开速度大幅提升`,fail?'no':'ok');
+        btn.disabled=false;
+        btn.textContent='重新检测';
+        this.tnScan();
+        this.renderManage();
+      },
+      btn
+    );
   },
   async mgDelete(d,i){
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
@@ -2721,20 +3229,22 @@ const Admin={
     }catch(error){this.status('删除未完成，原照片已保留：'+error.message,'no')}
     finally{this._mediaBusy=false;this.renderManage()}
   },
-  async mgDeleteGroup(d){
+  mgDeleteGroup(d,anchor){
     const g=this.mgData&&this.mgData.groups.find(x=>x.d===d);
     if(this._mediaBusy||!g)return;
-    if(!confirm(`确定删除整组「${g.title||d}」？列表和云端照片将被移除。`))return;
-    const previous=this.mgData.groups.slice(),keys=[];
-    (g.gs||[]).forEach(photo=>{if(photo.k)keys.push(photo.k);if(photo.tn){if(photo.tn.s)keys.push(photo.tn.s);if(photo.tn.v)keys.push(photo.tn.v)}});
-    this._mediaBusy=true;
-    try{
-      this.mgData.groups=this.mgData.groups.filter(item=>item!==g);
-      try{await this.mgSave()}catch(error){this.mgData.groups=previous;throw error}
-      try{if(keys.length)await this.del(keys);this.status('整组已移除','ok')}
-      catch(error){this.status('列表已更新，但部分文件未清理：'+error.message,'no')}
-    }catch(error){this.status('删除未完成，整组原照片已保留：'+error.message,'no')}
-    finally{this._mediaBusy=false;this.renderManage()}
+    const host=anchor?.closest('.mg-group')?.querySelector('.mg-g-head')||anchor?.closest('.mg-group');
+    this.confirmInline(host,`确定删除整组「${g.title||d}」？列表和云端照片将被移除。`,'确认删除整组',async()=>{
+      const previous=this.mgData.groups.slice(),keys=[];
+      (g.gs||[]).forEach(photo=>{if(photo.k)keys.push(photo.k);if(photo.tn){if(photo.tn.s)keys.push(photo.tn.s);if(photo.tn.v)keys.push(photo.tn.v)}});
+      this._mediaBusy=true;
+      try{
+        this.mgData.groups=this.mgData.groups.filter(item=>item!==g);
+        try{await this.mgSave()}catch(error){this.mgData.groups=previous;throw error}
+        try{if(keys.length)await this.del(keys);this.status('整组已移除','ok')}
+        catch(error){this.status('列表已更新，但部分文件未清理：'+error.message,'no')}
+      }catch(error){this.status('删除未完成，整组原照片已保留：'+error.message,'no')}
+      finally{this._mediaBusy=false;this.renderManage()}
+    },anchor);
   },
   /* 删除失败时的统一提示 */
   delFail(err){
@@ -2958,6 +3468,7 @@ const Admin={
         this.status(msg,'ok');
         $('#afDesc').value='';$('#afExif').value='';
         this._exifs=null;
+        this.clearExifPreviews();
         const xl0=$('#afExifList');xl0.hidden=true;xl0.innerHTML='';
         await Bus.emit('archive:reload');
         return;
@@ -3020,6 +3531,7 @@ const Admin={
       $('#adminForm').reset();
       $('#afDate').value=d;
       this._exifs=null;
+      this.clearExifPreviews();
       const xl=$('#afExifList');xl.hidden=true;xl.innerHTML='';
       /* 5. 通过事件总线刷新归档(Admin 不直调 Store/Archive,模块解耦) */
       await Bus.emit('archive:reload');
@@ -3075,6 +3587,11 @@ Social.init();   /* 访客身份(随机名字+头像) + 拉取点赞评论数据
   const ok=await Store.init();
   if(!ok&&!Store.groups.length)Store.setDemo();   /* 远程 data.json 存在则替换演示数据 */
   Archive.init();
+  if(location.hash.startsWith('#group=')){
+    let day='';
+    try{day=decodeURIComponent(location.hash.slice(7))}catch(e){}
+    if(day&&groupOf(day))GroupPage.open(day,{fromHash:true});
+  }
   if(!$('#voteBoardModal').hidden){Vote.renderGrid();Vote.updateBar();}
 })();
 /* 事件总线:上传完成后由 Admin 发出 archive:reload,Store/Archive 自主监听刷新(模块解耦) */

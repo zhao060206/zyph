@@ -8,16 +8,24 @@ export function seasonBudget(kind, width) {
   };
 }
 
+export function seasonSafeEdge(width, edgeOnly = false) {
+  const ratio = edgeOnly ? .038 : .022;
+  const minEdge = edgeOnly ? 16 : 10;
+  const maxEdge = edgeOnly ? 48 : 28;
+  return Math.max(minEdge, Math.min(maxEdge, width * ratio)) + Math.max(0, (width - 1560) * .5);
+}
+
 export function createSeasonScene(kind, width, height, random = Math.random) {
   const budget = seasonBudget(kind, width);
   const scene = { kind, width, height, random, budget, particles: [], deposits: [] };
   for (let index = 0; index < budget.count; index++) {
     const crystal = kind === 'winter' && index % 5 === 0;
     const size = (budget.minSize + random() * (budget.maxSize - budget.minSize)) * (crystal ? 1.65 : 1);
+    const alpha = kind === 'autumn' ? .34 + random() * .18 : kind === 'summer' ? .45 + random() * .2 : .54 + random() * .16;
     scene.particles.push({ x: random() * width, y: index < 2 ? height - size * 1.3 : random() * height,
       size, phase: random() * Math.PI * 2, spin: random() * 2 - 1, sprite: crystal ? 3 + Math.floor(index / 5) % 2 : index % 3,
       speed: kind === 'summer' ? 9 + random() * 12 : kind === 'winter' ? 28 + random() * 32 : 38 + random() * 36,
-      alpha: .7 + random() * .25 });
+      alpha });
   }
   return scene;
 }
@@ -41,14 +49,15 @@ export function depositPose(deposit) {
 
 export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = false) {
   const pileLimit = Math.floor(scene.budget.pileLimit * quality);
+  const depositStep = delta * (edgeOnly ? 4 : 1);
   for (let index = scene.deposits.length - 1; index >= 0; index--) {
     const deposit = scene.deposits[index];
-    deposit.age += delta;
+    deposit.age += depositStep;
     if (deposit.age >= deposit.hold + deposit.fade) scene.deposits.splice(index, 1);
   }
   if (scene.deposits.length > pileLimit) scene.deposits.splice(0, scene.deposits.length - pileLimit);
   const count = Math.floor(scene.particles.length * quality);
-  const edge = Math.max(10, Math.min(28, scene.width * .022)) + Math.max(0, (scene.width - 1560) * .5);
+  const edge = seasonSafeEdge(scene.width, edgeOnly);
   for (let index = 0; index < count; index++) {
     const particle = scene.particles[index];
     particle.y += particle.speed * delta;
@@ -68,14 +77,14 @@ export function stepSeasonScene(scene, delta, time, quality = 1, edgeOnly = fals
     }
     const floor = 6 + particle.size * .2 + Math.min(26, neighbours * 3);
     if (particle.y >= scene.height - floor) {
-      if (scene.kind !== 'summer') {
+      if (scene.kind !== 'summer' && (!edgeOnly || x <= edge || x >= scene.width - edge)) {
         if (scene.deposits.length === pileLimit) scene.deposits.shift();
         scene.deposits.push({ x: x / scene.width, floor,
           size: particle.size, sprite: particle.sprite, rotation: particlePose(particle, time).rotation, flatten: particlePose(particle, time).flatten, restTurn: (scene.random() - .5) * .35,
           alpha: particle.alpha, age: 0, hold: 6 + scene.random() * 4, fade: 18 + scene.random() * 10 });
       }
       particle.y = -particle.size;
-      const spawnEdge = Math.max(8, Math.min(24, scene.width * .018)) + Math.max(0, (scene.width - 1560) * .5);
+      const spawnEdge = Math.max(12, Math.min(36, scene.width * .028)) + Math.max(0, (scene.width - 1560) * .5);
       particle.x = edgeOnly ? scene.random() < .5 ? scene.random() * spawnEdge : scene.width - scene.random() * spawnEdge : scene.random() * scene.width;
     }
   }

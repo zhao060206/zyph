@@ -1,7 +1,7 @@
 export function setupDialogs(closeHandlers) {
   const openers = new Map();
   let top = null;
-  const isOpen = element => !element.hidden && (element.id !== 'lightbox' || element.classList.contains('open'));
+  const isOpen = element => !element.hidden && element.dataset.closing !== 'true' && (element.id !== 'lightbox' || element.classList.contains('open'));
   const roots = Object.keys(closeHandlers).map(id => document.getElementById(id)).filter(Boolean);
   const focusables = root => [...root.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')]
     .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
@@ -14,7 +14,10 @@ export function setupDialogs(closeHandlers) {
       if (isOpen(root) && !openers.has(root)) openers.set(root, document.activeElement);
       else if (!isOpen(root) && openers.has(root)) {
         const opener = openers.get(root); openers.delete(root);
-        if (opener && opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true });
+        const active = document.activeElement;
+        if ((!active || active === document.body || root.contains(active)) && opener && opener.isConnected && opener.getClientRects().length) {
+          opener.focus({ preventScroll: true });
+        }
       }
     }
     document.body.style.overflow = top ? 'hidden' : '';
@@ -24,8 +27,9 @@ export function setupDialogs(closeHandlers) {
       if (first) first.focus({ preventScroll: true });
     }
   }
+  const attrFilter = ['hidden', 'class', 'data-closing'];
   const observer = new MutationObserver(sync);
-  for (const root of roots) observer.observe(root, { attributes: true, attributeFilter: ['hidden', 'class'] });
+  for (const root of roots) observer.observe(root, { attributes: true, attributeFilter: attrFilter });
   document.addEventListener('keydown', event => {
     if (!top) return;
     if (event.key === 'Escape') {
@@ -47,7 +51,7 @@ export function setupDialogs(closeHandlers) {
     register(root, close) {
       closeHandlers[root.id] = close;
       roots.push(root);
-      observer.observe(root, { attributes: true, attributeFilter: ['hidden', 'class'] });
+      observer.observe(root, { attributes: true, attributeFilter: attrFilter });
       sync();
     },
     unregister(root) {
@@ -57,7 +61,7 @@ export function setupDialogs(closeHandlers) {
       if (index >= 0) roots.splice(index, 1);
       delete closeHandlers[root.id];
       observer.disconnect();
-      for (const element of roots) observer.observe(element, { attributes: true, attributeFilter: ['hidden', 'class'] });
+      for (const element of roots) observer.observe(element, { attributes: true, attributeFilter: attrFilter });
     },
   };
 }
