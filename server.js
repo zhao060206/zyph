@@ -599,6 +599,7 @@ const brotliCompress = promisify(zlib.brotliCompress);
 const publicFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/36f66244f70f87b5051951b7ea3fd160.txt', ['public/36f66244f70f87b5051951b7ea3fd160.txt', 'text/plain; charset=utf-8']],
   ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
   ...['spring', 'autumn'].flatMap(kind => [0,1,2].map(index => [`/assets/season/${kind}-${index}.webp`, [`public/season-assets/${kind}-${index}.webp`, 'image/webp']])),
