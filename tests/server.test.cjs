@@ -56,6 +56,45 @@ async function app(t, options = {}) {
   };
 }
 
+test('raffle verifies tasks, survives retries, blocks duplicate QQ and awards only the last available bag', async t=>{
+  const site=await app(t); const keys=['first','second'];
+  fs.writeFileSync(path.join(site.dir,'gallery.json'),JSON.stringify({groups:keys.map(d=>({d,gs:[{k:'photos/'+d}]}))}));
+  const journal=path.join(site.dir,'private/darkbag-01');fs.mkdirSync(journal,{recursive:true});
+  const existing=[...Array(32).fill('white'),...Array(5).fill('silver'),...Array(2).fill('gold')];
+  existing.forEach((tier,i)=>fs.writeFileSync(path.join(journal,String(i).padStart(4,'0')+'.json'),JSON.stringify({action:'draw',tier,owner:'seed'+i,qq:String(20000+i),number:i+1,ts:1})));
+  const api=async(route,body,cookie='')=>{const resp=await fetch(site.base+'/api/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',cookie},body:body?JSON.stringify(body):undefined});return {status:resp.status,data:await resp.json(),cookie:resp.headers.get('set-cookie')?.split(';')[0]};};
+  assert.equal((await api('raffle/admin',{action:'list'})).status,403);
+  assert.equal((await api('raffle/join',{qq:'bad'})).status,400);
+  assert.equal((await api('raffle/join',{qq:'20001'})).status,409);
+  const participants=[];
+  for(const qq of ['30001','30002']){
+    const {cookie}=await api('raffle/join',{qq}); assert.ok(cookie);
+    assert.equal((await api('raffle/draw',{},cookie)).status,409);
+    assert.equal((await api('raffle/album',{day:'fake'},cookie)).status,400);
+    for(const day of ['first','first','second'])await api('raffle/album',{day},cookie);
+    assert.equal((await api('raffle',null,cookie)).data.albums,2);
+    const input={key:'photos/first',visitor:{...visitor,id:'visitor-'+qq}};
+    await api('like',input,cookie);await api('like',input,cookie);
+    assert.equal((await api('raffle/draw',{},cookie)).status,409);
+    if(qq==='30001')await api('comment',{...input,text:'喜欢这张'},cookie);else await api('like',input,cookie);
+    participants.push(cookie);
+  }
+  const pulls=await Promise.all(participants.map(cookie=>api('raffle/draw',{},cookie)));
+  assert.deepEqual(pulls.map(r=>r.status).sort(),[200,409]);const win=pulls.findIndex(r=>r.status===200);
+  assert.deepEqual(pulls[win].data.result,{number:40,tier:'prism'});
+  assert.deepEqual((await api('raffle/draw',{},participants[win])).data.result,pulls[win].data.result);
+  const replay=await app(t);fs.cpSync(site.dir,replay.dir,{recursive:true});
+  const restarted=await fetch(replay.base+'/api/raffle',{headers:{cookie:participants[win]}});assert.deepEqual((await restarted.json()).result,pulls[win].data.result);
+  const pub=(await api('raffle')).data;assert.equal(pub.result,null);assert.equal(pub.remaining,0);assert.ok(!JSON.stringify(pub).includes('30001'));
+  const report=(await api('raffle/admin',{...admin,action:'claim',number:40})).data;assert.equal(report.rows[39].claimed,true);assert.equal(report.rows.length,40);
+});
+
+test('raffle pause, publish and permanent close preserve the edition',async t=>{
+  const site=await app(t);const set=action=>site.request('/api/raffle/admin',{...admin,action});
+  assert.equal((await set('pause')).data.status,'paused');assert.equal((await site.request('/api/raffle/join',{qq:'12345'})).status,409);
+  assert.equal((await set('publish')).data.status,'published'); assert.equal((await set('end')).data.status,'ended');assert.equal((await set('publish')).status,409);
+});
+
 test('new installations keep activities in draft and require admin authentication', async t => {
   const site = await app(t);
   assert.equal((await site.request('/api/health')).data.ok, true);

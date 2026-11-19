@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'phototropic-browser-'));
-fs.writeFileSync(path.join(process.env.DATA_DIR, 'gallery.json'), JSON.stringify({ groups: [{ d: '2026-01-01', gs: ['one', 'two', 'three'].map(name => ({ k: `photos/${name}.jpg` })) }] }));
+fs.writeFileSync(path.join(process.env.DATA_DIR, 'gallery.json'), JSON.stringify({ groups: [{ d: '2026-10-25', gs: ['one', 'two'].map(name => ({ k: `photos/${name}.jpg` })) },{d:'2025-06-08',gs:[{k:'photos/three.jpg'}]}] }));
 process.env.ADMIN_TOKEN = 'test-browser-only';
 delete process.env.COS_SECRET_ID;
 delete process.env.COS_SECRET_KEY;

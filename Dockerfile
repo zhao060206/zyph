@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
 # 再复制源码
-COPY server.js index.html ./
+COPY server.js raffle.cjs index.html ./
 COPY public ./public
 
 EXPOSE 3000

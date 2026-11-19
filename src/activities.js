@@ -25,7 +25,7 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
         const data = await this.call('/api/activities');
         this.publicData = data;
         const live = data.current.filter(item => item.config.status === 'published');
-        const hasActivities=live.length>0||data.history.length>0;
+        const hasActivities=!!$('#frogOpen')||live.length>0||data.history.length>0;
         $('#activities').hidden=!hasActivities;$('#navActivities').hidden=!hasActivities;
         clearTimeout(this.expiryTimer);
         const deadlines = live.filter(item => item.config.deadline).map(item => Date.parse(item.config.deadline.replace(' ', 'T') + '+08:00')).filter(Number.isFinite);
@@ -38,7 +38,7 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
           ${item.config.reward ? `<p class="event-time">参与纪念：${esc(item.config.reward)}</p>` : ''}
           <p class="event-time">${item.config.deadline ? '截止：' + esc(displayTime(item.config.deadline)) + '（北京时间）' : '进行中'}</p>
           <button type="button" data-open-event="${item.type}">${item.type === 'voting' ? '去投票' : '投递作品'} <span aria-hidden="true">↗</span></button></article>`).join('') :
-          '<p class="empty">暂无活动</p>';
+          '';
         $('#pastActivities').hidden = !data.history.length;
         $('#pastActivitiesList').innerHTML = data.history.map(item => `
           <div class="history-summary"><strong>${esc(item.config.title)}</strong><span>${typeLabel(item.type)} · ${item.participants} 人参与 · ${item.count} ${item.type === 'voting' ? '票' : '张照片'} · ${esc(displayTime(item.config.endedAt))} 结束</span></div>`).join('');

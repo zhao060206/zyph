@@ -129,6 +129,38 @@ function cosDelete(key) {
 const LOCAL_FILE = path.join(DATA_DIR, 'interactions.json');
 const useCos = Boolean(COS_SECRET_ID && COS_SECRET_KEY);
 
+const raffleKey = index => `private/darkbag-01/${String(index).padStart(4,'0')}.json`;
+function insertRaffleObject(key,text) {
+  return new Promise((resolve,reject)=>cos.putObject({Bucket:COS_BUCKET,Region:COS_REGION,Key:key,ACL:'private',Body:Buffer.from(text),Headers:{'x-cos-forbid-overwrite':'true'}},error=>{
+    if(!error) resolve(true); else if(error.statusCode===409 && ['ObjectAlreadyExists','FileAlreadyExists'].includes(error.code||error.error?.Code)) resolve(false); else reject(error);
+  }));
+}
+let raffleStorageChecked=false;
+async function checkRaffleStorage() {
+  if(!useCos||raffleStorageChecked)return;
+  const key='private/darkbag-01/storage-check.json';
+  if(await insertRaffleObject(key,'{}') && await insertRaffleObject(key,'{}')) throw new HttpError(503,'奖池存储未启用防覆盖，暂时不能参与');
+  raffleStorageChecked=true;
+}
+const raffle = require(path.join(__dirname,'raffle.cjs'))({
+  get HttpError() { return HttpError; },
+  async read(index) {
+    let raw;
+    if (useCos) raw=await cosGet(raffleKey(index));
+    else try { raw=await fs.promises.readFile(dataPath(raffleKey(index)),'utf8'); }
+    catch(error) { if(error.code==='ENOENT') return null; throw error; }
+    return raw===null?null:JSON.parse(raw);
+  },
+  async append(index,event) {
+    const key=raffleKey(index), text=JSON.stringify(event);
+    if (useCos) return insertRaffleObject(key,text);
+    const dest=dataPath(key); await fs.promises.mkdir(path.dirname(dest),{recursive:true});
+    const tmp=dest+'.'+crypto.randomUUID()+'.tmp'; await fs.promises.writeFile(tmp,text,{flag:'wx'});
+    try { await fs.promises.link(tmp,dest); return true; } catch(error) { if(error.code==='EEXIST') return false; throw error; }
+    finally {await fs.promises.unlink(tmp);}
+  }
+});
+
 function localGet() {
   try {
     return fs.readFileSync(LOCAL_FILE, 'utf8');
@@ -175,6 +207,7 @@ const EMPTY = () => ({ likes: [], comments: [] });
 function normalize(raw) {
   const out = {
     photos: Object.create(null),
+    rafflePending: raw?.rafflePending || {},
     voting: {
       config: null,
       votes: Object.create(null),
@@ -478,7 +511,7 @@ async function eligiblePhotoKeys() {
       if (photo.k) keys.add(photo.k);
       else if (photo.u) keys.add(`${group.d}#${photo.u}`);
     }
-    galleryCache = { keys, loadedAt: Date.now() };
+    galleryCache = { keys, albums:new Set(data.groups.filter(group=>(group.gs||[]).some(photo=>photo.k||photo.u)).map(group=>group.d)), loadedAt: Date.now() };
     return keys;
   } catch (error) {
     throw new HttpError(503, '作品目录暂时无法校验,请稍后再投票');
@@ -602,6 +635,7 @@ const publicFiles = new Map([
   ['/36f66244f70f87b5051951b7ea3fd160.txt', ['public/36f66244f70f87b5051951b7ea3fd160.txt', 'text/plain; charset=utf-8']],
   ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
+  ...['white','white-1','white-2','white-3','silver','silver-1','gold','prism'].map(art=>[`/assets/frog/${art}.webp`,[`public/frog-cards/${art}.webp`,'image/webp']]),
   ...['spring', 'autumn'].flatMap(kind => [0,1,2].map(index => [`/assets/season/${kind}-${index}.webp`, [`public/season-assets/${kind}-${index}.webp`, 'image/webp']])),
   ['/assets/season/ATTRIBUTION.md', ['public/season-assets/ATTRIBUTION.md', 'text/markdown; charset=utf-8']],
   ['/assets/tone-index.json', ['public/tone-index.json', 'application/json; charset=utf-8']],
@@ -671,6 +705,10 @@ async function handle(req, res) {
   }
 
   if (p === '/api/activities' && req.method === 'GET') return json(res, 200, publicActivities());
+  if (p==='/api/raffle'||p.startsWith('/api/raffle/')) {
+    await checkRaffleStorage();
+    return raffle.route({req,res,path:p,body:req[REQUEST_BODY]||{},store,json,persist,requireAdmin,ip,rateLimit,catalog:async()=>{await eligiblePhotoKeys();return galleryCache;}});
+  }
 
   if (p === '/api/activities/admin' && req.method === 'POST') {
     const body = await readBody(req);
@@ -718,6 +756,7 @@ async function handle(req, res) {
         ts: Date.now(),
       });
       liked = true;
+      if(!key.startsWith('grp:') && raffle.participating(req,store)) raffle.mark(req,store,key,'like',visitor.id,rec.likes[rec.likes.length-1].ts);
     }
     await persist();
     return json(res, 200, { liked, count: rec.likes.length, key });
@@ -745,6 +784,7 @@ async function handle(req, res) {
       ts: Date.now(),
     };
     rec.comments.push(item);
+    if(!key.startsWith('grp:') && raffle.participating(req,store)) raffle.mark(req,store,key,'comment',item.id,item.ts);
     if (rec.comments.length > MAX_COMMENTS_PER_PHOTO)
       rec.comments = rec.comments.slice(-MAX_COMMENTS_PER_PHOTO);
     await persist();

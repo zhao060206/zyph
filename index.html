@@ -54,11 +54,14 @@
   </section>
   <button id="toneMore" class="tone-more" type="button" hidden>继续浏览</button>
 </section>
-<section id="activities" class="activities-section" aria-labelledby="activitiesTitle"><div class="section-heading"><div class="section-title-wrap"><span class="section-eyebrow"></span><h2 id="activitiesTitle">活动</h2></div></div><div id="publicActivities" class="event-grid"><p class="empty">活动信息载入中…</p></div><div class="activity-badges" hidden><button id="topVoteBadge" hidden type="button">去投票</button><button id="topSubBadge" hidden type="button">投递作品</button></div><details id="pastActivities" class="past-activities" hidden><summary>往期活动</summary><div id="pastActivitiesList"></div></details></section>
+<section id="activities" class="activities-section" aria-labelledby="activitiesTitle"><div class="section-heading"><div class="section-title-wrap"><span class="section-eyebrow"></span><h2 id="activitiesTitle">活动</h2></div></div>
+<button class="frog-entry" id="frogOpen" type="button"><span class="frog-stamp" aria-hidden="true">A♢</span><span>奶蛙暗袋</span><small>卡片抽选 ↗</small></button>
+<div id="publicActivities" class="event-grid"><p class="empty">活动信息载入中…</p></div><div class="activity-badges" hidden><button id="topVoteBadge" hidden type="button">去投票</button><button id="topSubBadge" hidden type="button">投递作品</button></div><details id="pastActivities" class="past-activities" hidden><summary>往期活动</summary><div id="pastActivitiesList"></div></details></section>
 <footer class="site-footer"><span class="footer-brand">Phototropic</span><p class="footer-colophon">Curated Monochrome Archive · Season engine derived from unslop (CC BY 4.0) · Seasonal textures CC BY-SA 4.0</p><a href="#gallery">返回作品 ↑</a></footer>
 </main>
 <!-- 组详情子页面 -->
 <section class="group-page" id="groupPage" hidden>
+  <button class="frog-return frog-btn" id="frogReturn" type="button" hidden>查看卡袋</button>
   <div class="gp-top">
     <button class="gp-back" id="gpBack" aria-label="返回">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -192,6 +195,7 @@
   </div>
 </div>
 
+<div id="frogModal" class="frog-modal" hidden role="dialog" aria-modal="true" aria-labelledby="frogTitle"><section class="frog-panel"><header><span>PHOTOTROPIC / EDITION 01</span><button id="frogClose" type="button" aria-label="关闭抽奖">×</button></header><h2 id="frogTitle">奶蛙暗袋</h2><div id="frogBody"></div><p id="frogMessage" role="status" aria-live="polite"></p></section></div>
 <!-- 进站活动邀请弹窗 (优雅策展邀请函) -->
 <div class="vote-modal" id="voteNoticeModal" hidden role="dialog" aria-modal="true" aria-label="摄影投票活动">
   <div class="vm-mask" id="vmNoticeMask"></div>
@@ -327,6 +331,7 @@
       <button class="atab" data-tab="vote" role="tab" aria-selected="false">投票活动</button>
       <button class="atab" data-tab="submission" role="tab" aria-selected="false">作品征集</button>
       <button class="atab" data-tab="history" role="tab" aria-selected="false">活动记录</button>
+      <button class="atab" data-tab="raffle" role="tab" aria-selected="false">奶蛙暗袋</button>
       <button class="atab" data-tab="setup" role="tab" aria-selected="false">站点设置</button>
     </div>
 
@@ -452,6 +457,7 @@
     </div>
 
     <section class="admin-sec apane" data-pane="history" id="adminHistoryPane"><h2 class="admin-sec-t">活动记录</h2><p class="pane-intro">结束的活动独立留档。新一期的票数和投稿从零开始，旧记录可随时查看与导出。</p><button class="admin-btn" id="historyRefresh" type="button">刷新记录</button><div id="historyList"></div><div id="historyDetail" hidden></div></section>
+    <section class="admin-sec apane" data-pane="raffle"><h2 class="admin-sec-t">奶蛙暗袋 · 第一期</h2><button class="admin-btn" id="frogAdminRefresh" type="button">读取活动与兑奖记录</button><div id="frogAdminBody"></div><p id="frogAdminMessage" role="status"></p></section>
 <!-- ⑥ 站点设置(密钥 + 发布) -->
     <div class="apane" data-pane="setup">
       <div class="admin-sec" id="adminKeysSec">

@@ -1,5 +1,6 @@
 import { createArchive } from './gallery.js';
 import { createEventCenter } from './activities.js';
+import { createRaffleUI } from './raffle.js';
 import { setupDialogs } from './dialogs.js';
 import { createMotionController } from './motion.js';
 import { createSeasons } from './seasons.js';
@@ -1708,6 +1709,7 @@ const GroupPage={
     document.title=`${this.g.title} · Phototropic`;
     /* 组留言:进入这一组时加载并显示它的留言(空组也有) */
     Social.bindGroup(this.g);
+    Frog.album(this.g.d);
   },
   close(opt={}){
     this._pendingOpen='';
@@ -3571,7 +3573,9 @@ const Admin={
 };
 
 const EventCenter=createEventCenter({$,esc,fetchWithTimeout,CONFIG,Admin,Vote,Submission});
+const Frog=createRaffleUI({$,call:(action,body)=>EventCenter.call('/api/raffle'+action,body),auth:()=>EventCenter.auth()});
 const Dialogs=setupDialogs({
+  frogModal:()=>Frog.close(),
   lightbox:()=>Lightbox.close(),voteNoticeModal:()=>Vote.closeNotice(),
   voteBoardModal:()=>Vote.closeBoard(),subBoardModal:()=>Submission.closeBoard(),adminPanel:()=>Admin.close()
 });
@@ -3609,6 +3613,7 @@ Player.init();   /* 有曲目才显示唱片;访客默认静音 */
 Vote.init();     /* 投票活动生命周期管理与弹窗入口 */
 Submission.init();
 EventCenter.init();
+Frog.init();
 Motion.start();
 createSeasons({Motion,storageGet,storageSet}).start();
 
