@@ -9,6 +9,7 @@ const photos = Object.fromEntries(groups.flatMap(group => group.gs.map((photo, i
 delete photos['photos/sea-15.jpg'];
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v2','1'));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => {
     sessionStorage.setItem('pt_motion_grade_v1', JSON.stringify({ tier: 'full', timestamp: Date.now() }));

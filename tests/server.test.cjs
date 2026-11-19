@@ -69,24 +69,35 @@ test('raffle verifies tasks, survives retries, blocks duplicate QQ and awards on
   const participants=[];
   for(const qq of ['30001','30002']){
     const {cookie}=await api('raffle/join',{qq}); assert.ok(cookie);
-    assert.equal((await api('raffle/draw',{},cookie)).status,409);
-    assert.equal((await api('raffle/album',{day:'fake'},cookie)).status,400);
-    for(const day of ['first','first','second'])await api('raffle/album',{day},cookie);
-    assert.equal((await api('raffle',null,cookie)).data.albums,2);
+    assert.deepEqual((await api('raffle',null,cookie)).data.packs.map(p=>p.earned),[true,false,false]);
+    assert.equal((await api('raffle/draw',{slot:'photo'},cookie)).status,409);
+    assert.equal((await api('raffle/photo',{key:'fake'},cookie)).status,400);
+    for(const name of ['first','first','second'])await api('raffle/photo',{key:'photos/'+name},cookie);
+    assert.deepEqual((await api('raffle',null,cookie)).data.packs.map(p=>p.earned),[true,true,false]);
     const input={key:'photos/first',visitor:{...visitor,id:'visitor-'+qq}};
-    await api('like',input,cookie);await api('like',input,cookie);
-    assert.equal((await api('raffle/draw',{},cookie)).status,409);
+    assert.equal((await api('raffle/draw',{slot:'social'},cookie)).status,409);
     if(qq==='30001')await api('comment',{...input,text:'喜欢这张'},cookie);else await api('like',input,cookie);
     participants.push(cookie);
   }
   const pulls=await Promise.all(participants.map(cookie=>api('raffle/draw',{},cookie)));
-  assert.deepEqual(pulls.map(r=>r.status).sort(),[200,409]);const win=pulls.findIndex(r=>r.status===200);
+  assert.deepEqual(pulls.map(r=>r.status),[200,200]);const win=pulls.findIndex(r=>r.data.result.tier==='prism');assert.equal(pulls[1-win].data.result.tier,'white');
   assert.deepEqual(pulls[win].data.result,{number:40,tier:'prism'});
   assert.deepEqual((await api('raffle/draw',{},participants[win])).data.result,pulls[win].data.result);
   const replay=await app(t);fs.cpSync(site.dir,replay.dir,{recursive:true});
   const restarted=await fetch(replay.base+'/api/raffle',{headers:{cookie:participants[win]}});assert.deepEqual((await restarted.json()).result,pulls[win].data.result);
   const pub=(await api('raffle')).data;assert.equal(pub.result,null);assert.equal(pub.remaining,0);assert.ok(!JSON.stringify(pub).includes('30001'));
-  const report=(await api('raffle/admin',{...admin,action:'claim',number:40})).data;assert.equal(report.rows[39].claimed,true);assert.equal(report.rows.length,40);
+  const cookie=participants[win];const repeat=await Promise.all([api('raffle/draw',{slot:'photo'},cookie),api('raffle/draw',{slot:'photo'},cookie)]);assert.deepEqual(repeat[0].data.packs,repeat[1].data.packs);
+  const third=await api('raffle/draw',{slot:'social'},cookie);assert.equal(third.data.packs.filter(p=>p.card).length,3);assert.equal(third.data.result.tier,'white');
+  const report=(await api('raffle/admin',{...admin,action:'claim',number:40})).data;assert.equal(report.rows[39].claimed,true);assert.equal(report.rows.length,43);
+});
+
+test('previously opened cards occupy the welcome slot without losing earned bonus packs',async t=>{
+  const site=await app(t);const raw='a'.repeat(64),owner=require('node:crypto').createHash('sha256').update(raw).digest('hex');
+  const dir=path.join(site.dir,'private/darkbag-01');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'0000.json'),JSON.stringify({action:'draw',owner,number:1,tier:'gold',qq:'53841',ts:1}));
+  const call=async(route,body)=>{const res=await fetch(site.base+'/api/raffle'+route,{method:body?'POST':'GET',headers:{cookie:'pt_darkbag='+raw,'Content-Type':'application/json'},body:body&&JSON.stringify(body)});assert.equal(res.status,200);return res.json();};
+  const old=await call('/draw',{slot:'welcome'});assert.deepEqual(old.result,{number:1,tier:'gold'});assert.equal(old.remaining,39);
+  await call('/photo',{key:'photos/a.jpg'});const next=await call('/draw',{slot:'photo'});assert.equal(next.remaining,38);assert.deepEqual(next.packs[0].card,old.result);
+  const replay=await call('/draw',{slot:'welcome'});assert.deepEqual(replay.result,old.result);assert.equal(replay.remaining,38);
 });
 
 test('raffle pause, publish and permanent close preserve the edition',async t=>{

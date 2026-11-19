@@ -9,23 +9,30 @@ const owner = req => {
 module.exports = function createRaffle(adapter) {
   const {read,append,now=Date.now}=adapter;
   const events = [];
+  const tally={left:{...stock},draws:[],claims:new Set(),byOwner:new Map(),byQQ:new Map(),remaining:40,status:'published'};
+  let counted=0,lastChecked=0;
   const fail = (code, text) => { throw new adapter.HttpError(code,text); };
   async function sync() {
     for (;;) {
       const event = await read(events.length);
-      if (!event) return;
+      if (!event) {lastChecked=now();return;}
       if (!['draw','pause','publish','end','claim'].includes(event.action)) throw new Error('卡袋记录格式无效');
       events.push(event);
     }
   }
   function state() {
-    const left = {...stock}, draws = [], claims = new Set(); let status='published';
-    for (const event of events) {
-      if (event.action==='draw') { left[event.tier]--; draws.push(event); }
-      else if (event.action==='claim') claims.add(event.number);
-      else status=({pause:'paused',publish:'published',end:'ended'})[event.action];
+    for (;counted<events.length;counted++) {
+      const event=events[counted];
+      if (event.action==='draw') {
+        if(tally.remaining){tally.left[event.tier]--;tally.remaining--;}
+        tally.draws.push(event);tally.byQQ.set(event.qq,event.owner);
+        if(!tally.byOwner.has(event.owner))tally.byOwner.set(event.owner,[]);
+        tally.byOwner.get(event.owner).push(event);
+        if(event.number===40&&!event.slot)tally.status='ended';
+      } else if (event.action==='claim') tally.claims.add(event.number);
+      else tally.status=({pause:'paused',publish:'published',end:'ended'})[event.action];
     }
-    return {left, draws, claims, remaining:40-draws.length, status:draws.length===40?'ended':status};
+    return tally;
   }
   function requireLive(s) { if(s.status!=='published') fail(409,s.status==='paused'?'活动已暂停':'本期已结束'); }
   function result(row) {return row ? {number:row.number,tier:row.tier} : null;}
@@ -33,13 +40,14 @@ module.exports = function createRaffle(adapter) {
     if (!await append(events.length,event)) fail(409,'奖池刚刚更新，请重试');
     events.push(event);
   }
-  function task(pending,photos) {
-    return {albums:pending?.albums.length||0,social:!!pending?.marks.some(mark=>{
-      const rec=photos[mark.key];
-      return mark.kind==='like'?rec?.likes.some(item=>item.id===mark.id && item.ts===mark.ts):rec?.comments.some(item=>item.id===mark.id);
-    })};
+  function publicState(s,key,pending) {
+    const own=s.byOwner.get(key)||[];
+    const packs=['welcome','photo','social'].map(slot=>{
+      const row=own.find(item=>(item.slot||'welcome')===slot);
+      return {slot,earned:!!(row||pending&&(slot==='welcome'||pending[slot])),card:result(row)};
+    });
+    return {status:s.status,remaining:s.remaining,joined:!!pending||!!own.length,packs,result:result(own[own.length-1])};
   }
-  function publicState(s,key,pending,photos) {return {status:s.status,remaining:s.remaining,joined:!!pending,result:result(s.draws.find(row=>row.owner===key)),...task(pending,photos)};}
   function mark(req,store,key,kind,id,ts) {
     const entry=store.rafflePending[owner(req)];
     if (!entry || entry.marks.some(m=>m.kind===kind&&m.id===id&&m.ts===ts&&m.key===key)) return;
@@ -48,10 +56,10 @@ module.exports = function createRaffle(adapter) {
   async function route({req,res,path,body,store,json,persist,requireAdmin,catalog,ip,rateLimit}) {
     const action=path.slice('/api/raffle'.length)||'/status';
     if(req.method!==(action==='/status'?'GET':'POST')) fail(405,'请求方法无效');
-    if(!['/status','/join','/album','/draw','/admin'].includes(action)) fail(404,'未知操作');
+    if(!['/status','/join','/photo','/draw','/admin'].includes(action)) fail(404,'未知操作');
     if(!rateLimit(ip,'raffle'+action,action==='/join'?20:100,60000)) fail(429,'操作过于频繁');
     if(action==='/admin') requireAdmin(body);
-    await sync(); const s=state(); let key=owner(req), pending=store.rafflePending[key];
+    let key=owner(req);if(action!=='/status'||key||now()-lastChecked>=3000)await sync();const s=state();let pending=store.rafflePending[key];
     if(action==='/admin') {
       const op=body.action||'list';
       if(op==='claim') {
@@ -64,18 +72,22 @@ module.exports = function createRaffle(adapter) {
       }
       const updated=state(); return json(res,200,{status:updated.status,remaining:updated.remaining,rows:updated.draws.map(row=>({...result(row),qq:row.qq,ts:row.ts,claimed:updated.claims.has(row.number)}))});
     }
-    if(action==='/status') {
-      if(pending?.marks.length && s.status==='published' && !s.draws.some(row=>row.owner===key)) {
-        const {keys}=await catalog(); pending={...pending,marks:pending.marks.filter(mark=>keys.has(mark.key))};
-      }
-      return json(res,200,publicState(s,key,pending,store.photos));
+    const own=s.byOwner.get(key)||[];
+    if(!pending&&own.length && s.status==='published') {
+      pending=store.rafflePending[key]={qq:own[0].qq,ts:now(),marks:[]};await persist();
     }
-    const ownDraw=s.draws.find(row=>row.owner===key);
-    if(ownDraw) return json(res,200,publicState(s,key,pending,store.photos));
+    if(pending&&!pending.social&&pending.marks.length&&s.status==='published'&&(action==='/status'||action==='/draw'&&body.slot==='social')) {
+      const {keys}=await catalog();
+      if(pending.marks.some(mark=>keys.has(mark.key))) {pending.social=true;await persist();}
+    }
+    if(action==='/status') return json(res,200,publicState(s,key,pending));
+    const slot=body.slot||'welcome';
+    const previous=own.find(row=>(row.slot||'welcome')===slot);
+    if(action==='/draw'&&previous) return json(res,200,{...publicState(s,key,pending),result:result(previous)});
     requireLive(s);
     if(action==='/join') {
       const qq=String(body.qq||'').trim(); if(!/^[1-9]\d{4,11}$/.test(qq)) fail(400,'请输入有效的 QQ 号');
-      if(s.draws.some(row=>row.qq===qq)) fail(409,'这个 QQ 已经拆过本期卡袋');
+      if(s.byQQ.has(qq)&&s.byQQ.get(qq)!==key) fail(409,'这个 QQ 已在其他浏览器参与本期活动');
       if(!pending) {
         const raw=crypto.randomBytes(32).toString('hex'); key=crypto.createHash('sha256').update(raw).digest('hex');
         for(const [id,entry] of Object.entries(store.rafflePending)) if(now()-entry.ts>30*86400000) delete store.rafflePending[id];
@@ -85,23 +97,20 @@ module.exports = function createRaffle(adapter) {
       } else if(pending.qq!==qq) fail(409,'当前浏览器已登记其他 QQ');
     } else {
       if(!pending) fail(401,'请先填写 QQ，并允许本站保存参与凭证');
-      if(s.draws.some(row=>row.qq===pending.qq)) fail(409,'这个 QQ 已经拆过本期卡袋');
-      const {albums,keys}=await catalog();
-      if(action==='/album') {
-        if(!albums.has(body.day)) fail(400,'相册不存在');
-        if(pending.albums.length<2&&!pending.albums.includes(body.day)) {pending.albums.push(body.day);await persist();}
+      if(s.byQQ.has(pending.qq)&&s.byQQ.get(pending.qq)!==key) fail(409,'这个 QQ 已在其他浏览器参与本期活动');
+      if(action==='/photo') {
+        if(!pending.photo){const {keys}=await catalog();if(!keys.has(body.key))fail(400,'照片不存在');pending.photo=true;await persist();}
       } else {
-        const progress=task({...pending,marks:pending.marks.filter(mark=>keys.has(mark.key))},store.photos);
-        if(progress.albums<2||!progress.social) fail(409,'请先完成看展任务');
-        let ticket=crypto.randomInt(s.remaining); const tier=Object.keys(stock).find(name=>(ticket-=s.left[name])<0);
-        const row={action:'draw',owner:key,qq:pending.qq,tier,number:s.draws.length+1,ts:now()};
-        await save(row); return json(res,200,publicState(state(),key,pending,store.photos));
+        if(!['welcome','photo','social'].includes(slot)||slot!=='welcome'&&!pending[slot]) fail(409,'这个卡包尚未解锁');
+        let ticket=s.remaining?crypto.randomInt(s.remaining):0; const tier=s.remaining?Object.keys(stock).find(name=>(ticket-=s.left[name])<0):'white';
+        const row={action:'draw',slot,owner:key,qq:pending.qq,tier,number:s.draws.length+1,ts:now()};
+        await save(row); return json(res,200,publicState(state(),key,pending));
       }
     }
-    return json(res,200,publicState(s,key,pending,store.photos));
+    return json(res,200,publicState(s,key,pending));
   }
   return {route,mark,participating:(req,store)=>{
     const key=owner(req);if(!key||!store.rafflePending[key])return false;
-    const current=state();return current.status==='published'&&!current.draws.some(row=>row.owner===key);
+    return !store.rafflePending[key].social && state().status==='published';
   }};
 };

@@ -4,6 +4,7 @@ const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
 const original = { groups: [{ d: '2026-01-01', title: '原有相册', loc: '测试地点', gs: [{ t: '原照片', k: 'photos/original.jpg', tn: { s: 'photos/original_t480.jpg', v: 'photos/original_t1600.jpg' } }] }] };
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v2','1'));
   await page.addInitScript(() => {
     localStorage.setItem('pt_cos_sid', 'test-browser-fake-id');
     localStorage.setItem('pt_cos_skey', 'test-browser-fake-key');

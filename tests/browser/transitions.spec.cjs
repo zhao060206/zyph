@@ -4,6 +4,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 const groups = ['2026-10-01', '2025-06-02'].map((day, index) => ({ d: day, title: `Album ${index + 1}`, loc: 'Wuhan', gs: [0, 1].map(photo => ({ t: `Photo ${index}-${photo}`, k: `photos/${index}-${photo}.jpg`, tn: { s: `photos/${index}-${photo}-s.jpg`, v: `photos/${index}-${photo}-v.jpg` } })) }));
 
 test.beforeEach(async ({ page }) => {
+  await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v2','1'));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.addInitScript(() => {
     sessionStorage.setItem('pt_motion_grade_v1', JSON.stringify({ tier: 'full', timestamp: Date.now() }));

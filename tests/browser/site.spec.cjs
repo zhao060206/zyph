@@ -22,7 +22,8 @@ async function publish(request, type) {
   expect(result.ok()).toBe(true);
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page },info) => {
+  if(!info.title.startsWith('milk frog'))await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v2','1'));
   await page.route(bucket + '/**', async route => {
     const url = route.request().url();
     if (url.endsWith('/data.json')) return route.fulfill({ json: { groups } });
@@ -31,19 +32,18 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('milk frog pack: complete tasks, open a single card and recover on reload',async({page},info)=>{
-  await page.goto('/');await page.locator('#frogOpen').click();
+test('milk frog announcement and three separately earned packs survive reload',async({page},info)=>{
+  await page.goto('/');await expect(page.locator('#frogModal')).toBeVisible();
   await page.locator('#frogQQ').fill(String(80000000+info.workerIndex*10000+Math.floor(Math.random()*9999)));
-  await page.getByRole('button',{name:'登记并看展'}).click();await page.getByRole('button',{name:'去看作品'}).click();
-  await page.locator('.album-cover').first().click();await page.locator('.gp-preview-item').first().click();
-  await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/like')&&r.ok()),page.locator('#likeBtn').click()]);
-  await page.locator('#lbClose').click();await page.locator('#gpBack').click();await page.locator('.album-cover').nth(1).click();
-  await page.locator('#frogReturn').click();await expect(page.locator('.frog-tear')).toBeVisible();
+  await page.getByRole('button',{name:'领取入场包'}).click();await expect(page.locator('.frog-tear')).toBeVisible();
   if(info.project.name==='desktop-chromium'){
     const box=await page.locator('.frog-tear').boundingBox();await page.mouse.move(box.x+20,box.y+15);await page.mouse.down();await page.mouse.move(box.x+135,box.y+15,{steps:8});await page.mouse.up();
   }else await page.locator('.frog-tear').click();
   const card=page.locator('.frog-card');await expect(card).toBeVisible();await expect(card.locator('img')).toHaveJSProperty('naturalWidth',512);
-  const label=await card.innerText();await page.locator('#frogClose').click();await page.goto('/');await page.locator('#frogOpen').click();await expect(card).toHaveText(label.replace(/\n/g,' '),{useInnerText:true});
+  await page.locator('#frogClose').click();await page.locator('.album-cover').first().click();await page.locator('.gp-preview-item').first().click();
+  await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/like')&&r.ok()),page.locator('#likeBtn').click()]);await page.locator('#lbClose').click();await page.locator('#frogReturn').click();
+  for(const slot of ['photo','social']){await page.locator(`[data-frog="open:${slot}"]`).first().click();await page.locator('.frog-tear').press('Enter');await expect(page.locator('.frog-theater > .frog-card')).toBeVisible();await page.locator('[data-frog="wall"]').click();}
+  await expect(page.locator('[data-frog^="show:"]')).toHaveCount(3);await page.goto('/');await expect(page.locator('#frogModal')).toBeHidden();await page.locator('#frogOpen').click();await expect(page.locator('[data-frog^="show:"]')).toHaveCount(3);
 });
 
 test('gallery, search, year filter, empty album and themes work without script errors', async ({ page }) => {

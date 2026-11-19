@@ -635,6 +635,7 @@ const publicFiles = new Map([
   ['/36f66244f70f87b5051951b7ea3fd160.txt', ['public/36f66244f70f87b5051951b7ea3fd160.txt', 'text/plain; charset=utf-8']],
   ['/assets/app.js', ['public/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/site.css', ['public/site.css', 'text/css; charset=utf-8']],
+  ['/assets/frog/foil.webp',['public/frog-cards/foil.webp','image/webp']],
   ...['white','white-1','white-2','white-3','silver','silver-1','gold','prism'].map(art=>[`/assets/frog/${art}.webp`,[`public/frog-cards/${art}.webp`,'image/webp']]),
   ...['spring', 'autumn'].flatMap(kind => [0,1,2].map(index => [`/assets/season/${kind}-${index}.webp`, [`public/season-assets/${kind}-${index}.webp`, 'image/webp']])),
   ['/assets/season/ATTRIBUTION.md', ['public/season-assets/ATTRIBUTION.md', 'text/markdown; charset=utf-8']],

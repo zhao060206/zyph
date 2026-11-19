@@ -6,5 +6,6 @@ await build({
   minify: true, legalComments: 'none', charset: 'utf8',
 });
 await build({ entryPoints: ['src/site.css'], outfile: 'public/site.css', bundle: true, minify: true,
+  external: ['/assets/frog/foil.webp'],
   target: ['chrome64', 'safari12', 'firefox67'], legalComments: 'none' });
 console.log('Built public/app.js and public/site.css');

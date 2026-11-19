@@ -820,6 +820,7 @@ const Social={
       const cur=this.data.photos[key]||(this.data.photos[key]={likes:[],comments:[]});
       const mine=cur.likes.filter(l=>isMine(l));
       if(r.liked){
+        Frog.social();
         /* 服务器认为已赞:本地若还没有(或有多条)就补正为一条 */
         if(mine.length!==1){
           cur.likes=cur.likes.filter(l=>l&&!isMine(l));
@@ -881,6 +882,7 @@ const Social={
       });
       const rec=this.data.photos[key]||(this.data.photos[key]={likes:[],comments:[]});
       rec.comments.push(r.comment);
+      if(!key.startsWith('grp:'))Frog.social();
       this.ready=true;
       this.setOffline(false);
       if(ui.inp==='#cmInput')this.drafts.delete(key);
@@ -1709,7 +1711,6 @@ const GroupPage={
     document.title=`${this.g.title} · Phototropic`;
     /* 组留言:进入这一组时加载并显示它的留言(空组也有) */
     Social.bindGroup(this.g);
-    Frog.album(this.g.d);
   },
   close(opt={}){
     this._pendingOpen='';
@@ -2207,6 +2208,7 @@ const Lightbox={
     $('#lbCaption').textContent=(p.d&&p.d.trim())?p.d.trim():(g.c||'');
     /* 互动区:切到这张照片的点赞与评论(数据来自 COS) */
     Social.bind(g,p);
+    Frog.photo(Social.key(g,p));
     if(this._pre){this._pre.onload=null;this._pre.onerror=null;this._pre=null}
     const generation=(this._imageGeneration||0)+1;this._imageGeneration=generation;
     const stale=()=>this._imageGeneration!==generation||this.g!==g||this.g.gs[this.cur]!==p||this.el.hidden||this.el.dataset.closing==='true';
