@@ -4,6 +4,7 @@ import { createRaffleUI } from './raffle.js';
 import { setupDialogs } from './dialogs.js';
 import { createMotionController } from './motion.js';
 import { createSeasons } from './seasons.js';
+import { initSeasonPicker } from './season-picker.js';
 import { TONES, resolveTone } from './tones.mjs';
 import { analyzeBlob } from './color-analysis.js';
 (()=>{
@@ -3618,6 +3619,7 @@ EventCenter.init();
 Frog.init();
 Motion.start();
 createSeasons({Motion,storageGet,storageSet}).start();
+initSeasonPicker();
 
 (function(){
   const root=document.documentElement,btn=$('#themeBtn');

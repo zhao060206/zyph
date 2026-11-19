@@ -1,10 +1,10 @@
 export function seasonBudget(kind, width) {
   const mobile = width < 760;
   return {
-    count: kind === 'summer' ? mobile ? 12 : 18 : kind === 'winter' ? mobile ? 30 : 54 : kind === 'autumn' ? mobile ? 18 : 30 : mobile ? 24 : 42,
+    count: kind === 'summer' ? mobile ? 16 : 24 : kind === 'winter' ? mobile ? 30 : 54 : kind === 'autumn' ? mobile ? 18 : 30 : mobile ? 24 : 42,
     pileLimit: mobile ? 48 : 96,
-    minSize: kind === 'summer' ? 2 : kind === 'winter' ? mobile ? 10 : 12 : kind === 'autumn' ? mobile ? 24 : 30 : mobile ? 20 : 26,
-    maxSize: kind === 'summer' ? 5 : kind === 'winter' ? mobile ? 22 : 28 : kind === 'autumn' ? mobile ? 46 : 58 : mobile ? 38 : 48,
+    minSize: kind === 'summer' ? 3.5 : kind === 'winter' ? mobile ? 10 : 12 : kind === 'autumn' ? mobile ? 24 : 30 : mobile ? 20 : 26,
+    maxSize: kind === 'summer' ? 8.5 : kind === 'winter' ? mobile ? 22 : 28 : kind === 'autumn' ? mobile ? 46 : 58 : mobile ? 38 : 48,
   };
 }
 

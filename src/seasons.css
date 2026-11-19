@@ -13,9 +13,43 @@ body{background:var(--bg);isolation:isolate}
 .exhibition-hero{background:transparent}
 .season-controls{display:none}
 .nav-end .season-controls{display:flex;align-items:center;gap:4px}
-.season-picker select{appearance:none;border:0;border-radius:var(--control-radius);background:transparent;color:inherit;font:13px var(--sans);min-height:40px;min-width:52px;padding:6px 22px 6px 8px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238e9893' stroke-width='1.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;cursor:pointer}
-.season-picker select:hover{background:var(--surface-subtle)}
-.season-picker option{color:var(--text);background:var(--panel)}
+.season-picker{position:relative;display:inline-flex;align-items:center}
+.season-native-select{position:absolute;left:0;top:0;width:4px;height:4px;opacity:.01;pointer-events:none;border:0;padding:0;margin:0;overflow:hidden;z-index:-1}
+.season-trigger{position:relative;min-width:40px;min-height:40px;width:42px;height:40px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border:1px solid transparent;border-radius:var(--control-radius);background:transparent;color:var(--text)}
+.season-trigger::after{content:"";position:absolute;inset:-2px}
+.season-trigger:hover{background:var(--surface-subtle)}
+.season-trigger[aria-expanded=true]{background:var(--surface-subtle);border-color:var(--border-strong)}
+.season-trigger-glyph{display:grid;place-items:center;width:19px;height:19px;flex-shrink:0;--season-glyph-accent:var(--season-ink)}
+.season-trigger-caret{width:7px;height:7px;opacity:.54;flex-shrink:0}
+.season-trigger[aria-expanded=true] .season-trigger-caret{opacity:.9;transform:rotate(180deg)}
+html[data-motion=full] .season-trigger-caret{transition:transform .18s var(--ease),opacity .16s var(--ease)}
+.season-glyph{display:block;width:100%;height:100%}
+.season-glyph .sg-main{stroke-width:1.4}
+.season-glyph .sg-fine{stroke-width:1.05}
+.season-glyph.is-auto .season-inner-glyph .sg-main{stroke-width:2.2}
+.season-glyph.is-auto .season-inner-glyph .sg-fine{stroke-width:1.65}
+.season-menu{--menu-x:-50%;position:absolute;top:calc(100% + 12px);left:50%;transform:translateX(var(--menu-x));z-index:820;display:inline-flex;align-items:center;gap:3px;padding:4px;width:max-content;max-width:calc(100vw - 24px);border-radius:999px;background:var(--panel);border:1px solid var(--border-strong);box-shadow:0 10px 28px rgba(18,18,17,.12),0 2px 6px rgba(18,18,17,.05)}
+html[data-theme=dark] .season-menu{box-shadow:0 12px 32px rgba(0,0,0,.48),0 2px 8px rgba(0,0,0,.28)}
+@supports(background:color-mix(in srgb,red 50%,transparent)){
+ .season-menu{background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px) saturate(1.08);-webkit-backdrop-filter:blur(12px) saturate(1.08)}
+}
+html[data-motion=full] .season-menu:not([hidden]){animation:season-menu-in .18s var(--ease) both}
+@keyframes season-menu-in{from{opacity:0;transform:translateX(var(--menu-x)) translateY(-4px)}to{opacity:1;transform:translateX(var(--menu-x)) translateY(0)}}
+.season-option{position:relative;width:38px;height:38px;padding:0;display:grid;place-items:center;flex-shrink:0;border-radius:999px;border:1px solid transparent;color:var(--muted);background:transparent;--season-glyph-accent:currentColor}
+.no-flexgap .season-option+.season-option{margin-left:3px}
+.season-option svg{width:18px;height:18px}
+.season-option:focus-visible{outline-offset:1px}
+.season-option:hover{color:var(--opt-ink,var(--text));background:var(--surface-subtle);--season-glyph-accent:var(--opt-ink,var(--season-ink))}
+.season-option[aria-checked=true]{color:var(--opt-ink,var(--text));background:var(--opt-wash,var(--surface-hover));border-color:var(--opt-border,var(--border-strong));--season-glyph-accent:var(--opt-ink,var(--season-ink))}
+.season-option[data-season-option=auto]{--opt-ink:var(--text);--opt-wash:var(--surface-hover);--opt-border:var(--border-strong);--season-glyph-accent:var(--season-ink)}
+.season-option[data-season-option=spring]{--opt-ink:#9d586e;--opt-wash:#f0e4e8;--opt-border:rgba(157,88,110,.36)}
+.season-option[data-season-option=summer]{--opt-ink:#246654;--opt-wash:#e1ede8;--opt-border:rgba(36,102,84,.34)}
+.season-option[data-season-option=autumn]{--opt-ink:#a15933;--opt-wash:#eee4d6;--opt-border:rgba(161,89,51,.36)}
+.season-option[data-season-option=winter]{--opt-ink:#3a5e80;--opt-wash:#e0e8f2;--opt-border:rgba(58,94,128,.36)}
+html[data-theme=dark] .season-option[data-season-option=spring]{--opt-ink:#dfa1b9;--opt-wash:#281c22;--opt-border:rgba(223,161,185,.36)}
+html[data-theme=dark] .season-option[data-season-option=summer]{--opt-ink:#96c5b0;--opt-wash:#16241f;--opt-border:rgba(150,197,176,.34)}
+html[data-theme=dark] .season-option[data-season-option=autumn]{--opt-ink:#dbb17f;--opt-wash:#241c15;--opt-border:rgba(219,177,127,.36)}
+html[data-theme=dark] .season-option[data-season-option=winter]{--opt-ink:#a0c6e5;--opt-wash:#172231;--opt-border:rgba(160,198,229,.36)}
 #seasonEffects{position:relative;width:40px;height:40px;display:grid;place-items:center;color:inherit;border-radius:var(--control-radius)}
 #seasonEffects::after{content:"";position:absolute;inset:-2px}
 #seasonEffects[aria-pressed=false]{opacity:.48}
@@ -49,7 +83,9 @@ html[data-motion=full] .tone-filter:active,html[data-motion=full] .gallery-mode 
 .mg-tone{max-width:160px;min-height:44px;border:1px solid var(--border);background:var(--panel);border-radius:var(--control-radius);padding:8px 12px}
 html[data-motion=lite] *,html[data-motion=none] *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 @media(max-width:760px){
- .season-picker select{min-width:42px;padding:6px 16px 6px 6px;font-size:12.5px}
+ .nav-end .season-controls{gap:2px}
+ .season-trigger{width:40px;height:40px;padding:0 4px}
+ .season-menu{--menu-x:0px;top:calc(100% + 10px);left:auto;right:-72px}
  #seasonEffects{width:36px;height:36px}
  #seasonEffects::after{inset:-4px}
  .tone-filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;padding-right:28px;gap:6px;margin-bottom:24px;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(90deg,#000 0%,#000 calc(100% - 28px),transparent 100%)}
