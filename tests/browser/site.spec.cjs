@@ -23,7 +23,7 @@ async function publish(request, type) {
 }
 
 test.beforeEach(async ({ page },info) => {
-  if(!info.title.startsWith('milk frog'))await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v2','1'));
+  if(!info.title.startsWith('milk frog'))await page.addInitScript(()=>sessionStorage.setItem('pt_frog_invite_v3','1'));
   await page.route(bucket + '/**', async route => {
     const url = route.request().url();
     if (url.endsWith('/data.json')) return route.fulfill({ json: { groups } });
@@ -35,7 +35,7 @@ test.beforeEach(async ({ page },info) => {
 test('milk frog announcement and three separately earned packs survive reload',async({page},info)=>{
   await page.goto('/');await expect(page.locator('#frogModal')).toBeVisible();
   await page.locator('#frogQQ').fill(String(80000000+info.workerIndex*10000+Math.floor(Math.random()*9999)));
-  await page.getByRole('button',{name:'领取入场包'}).click();await expect(page.locator('.frog-tear')).toBeVisible();
+  await page.getByRole('button',{name:'马上领第一包'}).click();await expect(page.locator('.frog-tear')).toBeVisible();
   if(info.project.name==='desktop-chromium'){
     const box=await page.locator('.frog-tear').boundingBox();await page.mouse.move(box.x+15,box.y+15);await page.mouse.down();await page.mouse.move(box.x+box.width*.82,box.y+15,{steps:8});await page.mouse.up();
   }else await page.locator('.frog-tear').click();
@@ -61,7 +61,7 @@ test('milk frog foil follows the finger and exposed cards switch without a draw'
   const seam=await pouch.evaluate(p=>({clip:getComputedStyle(p.querySelector('.foil-intact')).clipPath,turn:getComputedStyle(p.querySelector('.foil-flap')).transform,progress:parseFloat(getComputedStyle(p).getPropertyValue('--tear'))}));
   expect(seam.progress).toBeGreaterThan(.4);expect(seam.progress).toBeLessThan(.7);expect(seam.clip).not.toBe('none');expect(seam.turn).not.toBe('matrix(1, 0, 0, 1, 0, 0)');
   await up();await expect(tear).toBeVisible();expect(draws).toBe(0);
-  await down();await move(.76);await up();const front=page.locator('.frog-theater > .frog-card'),caption=page.locator('.frog-caption h3');await expect(front).toContainText('016');await expect(caption).toHaveText('奶蛙收藏卡');
+  await down();await move(.76);await up();const front=page.locator('.frog-theater > .frog-card'),caption=page.locator('.frog-caption h3');await expect(front).toContainText('016');await expect(caption).toHaveText('奶蛙小卡片（虚拟）');
   const stage=page.locator('.frog-theater');
   async function pressExposed(side){const point=await stage.evaluate((root,side)=>{const target=root.querySelector('.foil-sibling.'+side),b=root.getBoundingClientRect(),y=b.y+b.height*.5;const hits=[];for(let x=b.left+2;x<b.right-2;x+=2){if(target.contains(document.elementFromPoint(x,y)))hits.push(x);}return hits.length>8?{x:hits[Math.floor(hits.length/2)],y}:null;},side);expect(point).not.toBeNull();if(mobile)await page.touchscreen.tap(point.x,point.y);else await page.mouse.click(point.x,point.y);}
   await expect(page.locator('.frog-deck-nav span')).toHaveText('2 / 3');await expect.poll(async()=>page.locator('.foil-sibling.left').evaluate(e=>{const b=e.getBoundingClientRect(),f=e.parentNode.querySelector(':scope > .frog-card').getBoundingClientRect();return f.left-b.left;})).toBeGreaterThan(12);

@@ -59,7 +59,7 @@ async function app(t, options = {}) {
 test('raffle verifies tasks, survives retries, blocks duplicate QQ and awards only the last available bag', async t=>{
   const site=await app(t); const keys=['first','second'];
   fs.writeFileSync(path.join(site.dir,'gallery.json'),JSON.stringify({groups:keys.map(d=>({d,gs:[{k:'photos/'+d}]}))}));
-  const journal=path.join(site.dir,'private/darkbag-01');fs.mkdirSync(journal,{recursive:true});
+  const journal=path.join(site.dir,'private/darkbag-02');fs.mkdirSync(journal,{recursive:true});
   const existing=[...Array(32).fill('white'),...Array(5).fill('silver'),...Array(2).fill('gold')];
   existing.forEach((tier,i)=>fs.writeFileSync(path.join(journal,String(i).padStart(4,'0')+'.json'),JSON.stringify({action:'draw',tier,owner:'seed'+i,qq:String(20000+i),number:i+1,ts:1})));
   const api=async(route,body,cookie='')=>{const resp=await fetch(site.base+'/api/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',cookie},body:body?JSON.stringify(body):undefined});return {status:resp.status,data:await resp.json(),cookie:resp.headers.get('set-cookie')?.split(';')[0]};};
@@ -93,8 +93,8 @@ test('raffle verifies tasks, survives retries, blocks duplicate QQ and awards on
 
 test('previously opened cards occupy the welcome slot without losing earned bonus packs',async t=>{
   const site=await app(t);const raw='a'.repeat(64),owner=require('node:crypto').createHash('sha256').update(raw).digest('hex');
-  const dir=path.join(site.dir,'private/darkbag-01');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'0000.json'),JSON.stringify({action:'draw',owner,number:1,tier:'gold',qq:'53841',ts:1}));
-  const call=async(route,body)=>{const res=await fetch(site.base+'/api/raffle'+route,{method:body?'POST':'GET',headers:{cookie:'pt_darkbag='+raw,'Content-Type':'application/json'},body:body&&JSON.stringify(body)});assert.equal(res.status,200);return res.json();};
+  const dir=path.join(site.dir,'private/darkbag-02');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'0000.json'),JSON.stringify({action:'draw',owner,number:1,tier:'gold',qq:'53841',ts:1}));
+  const call=async(route,body)=>{const res=await fetch(site.base+'/api/raffle'+route,{method:body?'POST':'GET',headers:{cookie:'pt_darkbag_v2='+raw,'Content-Type':'application/json'},body:body&&JSON.stringify(body)});assert.equal(res.status,200);return res.json();};
   const old=await call('/draw',{slot:'welcome'});assert.deepEqual(old.result,{number:1,tier:'gold'});assert.equal(old.remaining,39);
   await call('/photo',{key:'photos/a.jpg'});const next=await call('/draw',{slot:'photo'});assert.equal(next.remaining,38);assert.deepEqual(next.packs[0].card,old.result);
   const replay=await call('/draw',{slot:'welcome'});assert.deepEqual(replay.result,old.result);assert.equal(replay.remaining,38);

@@ -55,12 +55,12 @@
   <button id="toneMore" class="tone-more" type="button" hidden>继续浏览</button>
 </section>
 <section id="activities" class="activities-section" aria-labelledby="activitiesTitle"><div class="section-heading"><div class="section-title-wrap"><span class="section-eyebrow"></span><h2 id="activitiesTitle">活动</h2></div></div>
-<button class="frog-entry" id="frogOpen" type="button"><span class="frog-stamp" aria-hidden="true">A<i>♢</i></span><span class="frog-entry-copy"><strong>奶蛙暗袋</strong><em>EDITION 01 · 限时开袋与藏品收集</em></span><small>卡片抽选 ↗</small></button>
+<button class="frog-entry" id="frogOpen" type="button"><span class="frog-entry-avatar" aria-hidden="true"><img src="/assets/frog/white-2.webp" alt="" width="56" height="56" draggable="false"></span><span class="frog-entry-copy"><strong>惊喜抽奖 <i class="frog-entry-badge">进行中</i></strong><em>星巴克、奈雪、照片冰箱贴，最多可领 3 包</em></span><small>去抽奖 ↗</small></button>
 <div id="publicActivities" class="event-grid"><p class="empty">活动信息载入中…</p></div><div class="activity-badges" hidden><button id="topVoteBadge" hidden type="button">去投票</button><button id="topSubBadge" hidden type="button">投递作品</button></div><details id="pastActivities" class="past-activities" hidden><summary>往期活动</summary><div id="pastActivitiesList"></div></details></section>
 <footer class="site-footer"><span class="footer-brand">Phototropic</span><p class="footer-colophon">Curated Monochrome Archive · Season engine derived from unslop (CC BY 4.0) · Seasonal textures CC BY-SA 4.0</p><a href="#gallery">返回作品 ↑</a></footer>
 </main>
 <!-- 组详情子页面 -->
-<button class="frog-return frog-btn" id="frogReturn" type="button" hidden><i class="frog-return-mark" aria-hidden="true">♢</i><span>我的卡包</span></button>
+<button class="frog-return frog-btn" id="frogReturn" type="button" hidden><img class="frog-return-avatar" src="/assets/frog/white-2.webp" alt="" width="24" height="24" aria-hidden="true"><span>我的抽奖</span></button>
 <section class="group-page" id="groupPage" hidden>
   <div class="gp-top">
     <button class="gp-back" id="gpBack" aria-label="返回">
@@ -195,7 +195,7 @@
   </div>
 </div>
 
-<div id="frogModal" class="frog-modal" hidden role="dialog" aria-modal="true" aria-labelledby="frogTitle"><section class="frog-panel"><header><div class="frog-panel-brand"><i class="frog-brand-dot" aria-hidden="true">♢</i><span>PHOTOTROPIC <i>/</i> EDITION 01</span></div><button id="frogClose" type="button" aria-label="关闭活动告示">×</button></header><h2 id="frogTitle" class="sr-only">奶蛙暗袋 · 限时抽卡活动</h2><div id="frogBody"></div><p id="frogMessage" role="status" aria-live="polite"></p></section></div>
+<div id="frogModal" class="frog-modal" hidden role="dialog" aria-modal="true" aria-labelledby="frogTitle"><section class="frog-panel"><header><div class="frog-panel-brand"><img class="frog-brand-avatar" src="/assets/frog/white-2.webp" alt="" width="28" height="28" aria-hidden="true"><strong>惊喜抽奖</strong><span class="frog-live-tag">进行中</span></div><button id="frogClose" type="button" aria-label="关闭活动弹窗">×</button></header><h2 id="frogTitle" class="sr-only">惊喜抽奖活动</h2><div id="frogBody"></div><p id="frogMessage" role="status" aria-live="polite"></p></section></div>
 <!-- 进站活动邀请弹窗 (优雅策展邀请函) -->
 <div class="vote-modal" id="voteNoticeModal" hidden role="dialog" aria-modal="true" aria-label="摄影投票活动">
   <div class="vm-mask" id="vmNoticeMask"></div>
@@ -331,7 +331,7 @@
       <button class="atab" data-tab="vote" role="tab" aria-selected="false">投票活动</button>
       <button class="atab" data-tab="submission" role="tab" aria-selected="false">作品征集</button>
       <button class="atab" data-tab="history" role="tab" aria-selected="false">活动记录</button>
-      <button class="atab" data-tab="raffle" role="tab" aria-selected="false">奶蛙暗袋</button>
+      <button class="atab" data-tab="raffle" role="tab" aria-selected="false">惊喜抽奖</button>
       <button class="atab" data-tab="setup" role="tab" aria-selected="false">站点设置</button>
     </div>
 
@@ -457,7 +457,7 @@
     </div>
 
     <section class="admin-sec apane" data-pane="history" id="adminHistoryPane"><h2 class="admin-sec-t">活动记录</h2><p class="pane-intro">结束的活动独立留档。新一期的票数和投稿从零开始，旧记录可随时查看与导出。</p><button class="admin-btn" id="historyRefresh" type="button">刷新记录</button><div id="historyList"></div><div id="historyDetail" hidden></div></section>
-    <section class="admin-sec apane" data-pane="raffle"><h2 class="admin-sec-t">奶蛙暗袋 · 第一期</h2><button class="admin-btn" id="frogAdminRefresh" type="button">读取活动与兑奖记录</button><div id="frogAdminBody"></div><p id="frogAdminMessage" role="status"></p></section>
+    <section class="admin-sec apane" data-pane="raffle"><h2 class="admin-sec-t">惊喜抽奖 · 兑奖记录</h2><button class="admin-btn" id="frogAdminRefresh" type="button">读取活动与兑奖记录</button><div id="frogAdminBody"></div><p id="frogAdminMessage" role="status"></p></section>
 <!-- ⑥ 站点设置(密钥 + 发布) -->
     <div class="apane" data-pane="setup">
       <div class="admin-sec" id="adminKeysSec">

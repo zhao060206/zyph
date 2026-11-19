@@ -1,17 +1,18 @@
 import { bindTear, finishTear } from './foil-tear.js';
 
 const tiers = {
-  white: ['J', '♧', '白卡', '奶蛙收藏卡'],
+  white: ['J', '♧', '白卡', '奶蛙小卡片（虚拟）'],
   silver: ['Q', '♤', '银卡', '随机照片冰箱贴'],
   gold: ['K', '♡', '金卡', '奈雪杨枝甘露套餐'],
   prism: ['A', '♢', '炫彩卡', '星巴克大杯太妃拿铁'],
 };
 
-const names = { welcome: '入场包', photo: '看展包', social: '互动包' };
-const hints = { welcome: '进入活动 · 登记即可开启', photo: '在归档中打开任意一张照片', social: '给喜欢的一张照片点赞或评论' };
-const shortHints = { welcome: '进入活动', photo: '打开一张照片', social: '点赞或评论照片' };
+const names = { welcome: '见面包', photo: '看图包', social: '互动包' };
+const hints = { welcome: '填完 QQ 就能直接拆', photo: '随便点开一张照片看一眼', social: '给喜欢的照片点个赞或留句话' };
+const shortHints = { welcome: '填 QQ 马上拆', photo: '点开任意照片', social: '点赞或留句话' };
 const life = { published: '进行中', paused: '已暂停', ended: '已结束' };
-const seenKey = 'pt_frog_invite_v2';
+const seenKey = 'pt_frog_invite_v3';
+const joinedKey = 'pt_frog_joined_v2';
 
 const getMotionTier = () => document.documentElement.dataset.motion || 'lite';
 const prefersReduced = () => getMotionTier() === 'none' || matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -47,14 +48,14 @@ const face = card => {
     `<span class="frog-card-frame" aria-hidden="true"></span>` +
     `<span class="frog-corner" aria-hidden="true">${cornerText}</span>` +
     `<span class="frog-art-window"><img width="512" height="512" src="${art(card)}" alt="${name}奶蛙" draggable="false"></span>` +
-    `<span class="frog-legend"><strong>${name}</strong><small>Nº ${String(card.number).padStart(3, '0')}</small></span>` +
+    `<span class="frog-legend"><strong>${name}</strong><small>#${String(card.number).padStart(3, '0')}</small></span>` +
     `<span class="frog-corner is-bottom" aria-hidden="true">${cornerText}</span>` +
     `<span class="frog-card-glare" aria-hidden="true"></span>` +
     `<span class="frog-card-sheen" aria-hidden="true"></span>`
   );
 };
 
-const cardLabel = pack => `${names[pack.slot]} · ${tiers[pack.card.tier][2]} Nº ${pack.card.number}`;
+const cardLabel = pack => `${names[pack.slot]} · ${tiers[pack.card.tier][2]} #${pack.card.number}`;
 
 /** 从 DOM 计算矩阵中解析实时缩放与平面旋转角，兼容 2D/3D 变换矩阵确保连点无缝衔接。 */
 function sampleTransform(el) {
@@ -113,7 +114,7 @@ export function createRaffleUI({ $, call, auth }) {
   let data = null, version = 0, busy = false, active = false, visiting = Promise.resolve(), toastTimer, announced = false;
   let deckState = null;
 
-  try { active = localStorage.getItem('pt_frog_joined') === '1'; } catch {}
+  try { active = localStorage.getItem(joinedKey) === '1'; } catch {}
   const flag = () => { announced = true; try { sessionStorage.setItem(seenKey, '1'); } catch {} };
 
   function preloadOwned(packs) {
@@ -157,7 +158,7 @@ export function createRaffleUI({ $, call, auth }) {
     const unopened = next.status === 'published' ? next.packs.filter(v => v.earned && !v.card).length : 0;
     if (unopened > 0) ret.dataset.unopened = String(unopened);
     else delete ret.dataset.unopened;
-    try { localStorage.setItem('pt_frog_joined', active ? '1' : '0'); } catch {}
+    try { localStorage.setItem(joinedKey, active ? '1' : '0'); } catch {}
     preloadOwned(next.packs);
   }
 
@@ -169,7 +170,7 @@ export function createRaffleUI({ $, call, auth }) {
     message.textContent = '';
   }
 
-  /** 我的卡包墙：展示三包收集进度条与带徽章状态卡槽。 */
+  /** 我的奖品袋：展示奶蛙同伴与 3 包领取/开启进度。 */
   function wall() {
     clearDeckState();
     const slots = data.packs;
@@ -188,13 +189,13 @@ export function createRaffleUI({ $, call, auth }) {
         ? `<span class="frog-slot-badge ${v.card.tier}">${tiers[v.card.tier][0]}${tiers[v.card.tier][1]}</span>`
         : `<small class="frog-slot-num">0${i + 1}</small>`;
       const subText = v.card
-        ? `Nº ${String(v.card.number).padStart(3, '0')} · ${tiers[v.card.tier][2]}`
+        ? `#${String(v.card.number).padStart(3, '0')} · ${tiers[v.card.tier][2]}`
         : hints[v.slot];
       const tag = v.card
-        ? `<i class="frog-slot-tag">${tiers[v.card.tier][2]} ↗</i>`
+        ? `<i class="frog-slot-tag">看这张 ↗</i>`
         : v.earned
-          ? `<i class="frog-slot-tag is-ready">可拆 ↗</i>`
-          : `<i class="frog-slot-tag">待解锁</i>`;
+          ? `<i class="frog-slot-tag is-ready">去拆包 ↗</i>`
+          : `<i class="frog-slot-tag">去解锁</i>`;
       return (
         `<button type="button" class="frog-slot ${stateClass}" data-frog="${click}" ${!v.earned && data.status !== 'published' ? 'disabled' : ''}>` +
         `${leadBadge}` +
@@ -205,25 +206,30 @@ export function createRaffleUI({ $, call, auth }) {
     }).join('');
 
     const subtitle = data.status !== 'published'
-      ? `${life[data.status]} · 已拆 ${openedCount} / 3 包`
+      ? `${life[data.status]} · 共拆过 ${openedCount} / 3 包`
       : unopenedCount > 0
-        ? `${unopenedCount} 个卡包可立即拆封 · 每个 QQ 最多三包`
+        ? `还有 ${unopenedCount} 包没拆，点一下就能拆开`
         : openedCount === 3
-          ? '已集齐本期全部三张奶蛙卡'
-          : '完成看展或互动任务解锁更多卡包';
+          ? '3 包都拆完啦，点下面卡片就能再看看'
+          : '去逛逛照片或给喜欢的那张留句话，还能再拿新包';
 
     const cta = next && data.status === 'published'
-      ? btn('open:' + next.slot, '拆' + names[next.slot] + ' ↗')
+      ? btn('open:' + next.slot, '去拆' + names[next.slot] + ' ↗', 'frog-btn frog-btn-primary')
       : data.status === 'published' && slots.some(v => !v.earned)
-        ? btn('browse', '去看照片解锁 ↗')
+        ? btn('browse', '去逛照片领新包 ↗', 'frog-btn frog-btn-primary')
         : '';
 
     return (
       `<div class="frog-layout">` +
-      `<div class="foil-display"><span class="foil-display-glow" aria-hidden="true"></span>${pouch()}<span class="foil-edition-tag" aria-hidden="true">COLLECTION · ${openedCount}/3</span></div>` +
+      `<div class="foil-display is-wall">` +
+      `<span class="foil-display-glow" aria-hidden="true"></span>` +
+      `<figure class="frog-mascot is-wall"><img src="/assets/frog/silver-1.webp" alt="举着胶片开心大笑的奶蛙" width="220" height="220" draggable="false"></figure>` +
+      `${pouch()}` +
+      `<span class="foil-edition-tag" aria-hidden="true">已拆 ${openedCount} / 3 包</span>` +
+      `</div>` +
       `<div class="frog-copy">` +
-      `<div class="frog-eyebrow-row"><small class="frog-eyebrow">我的收藏</small><div class="frog-meter" aria-hidden="true">${meter}</div></div>` +
-      `<h3>我的卡包</h3>` +
+      `<div class="frog-eyebrow-row"><small class="frog-eyebrow">领包进度</small><div class="frog-meter" aria-hidden="true">${meter}</div></div>` +
+      `<h3>我的奖品袋</h3>` +
       `<p>${subtitle}</p>` +
       `<div class="frog-slots">${rows}</div>` +
       `${cta}` +
@@ -231,42 +237,47 @@ export function createRaffleUI({ $, call, auth }) {
     );
   }
 
-  /** 渲染未参与欢迎页或活动结束页；已参与者自动切入我的卡包墙。 */
+  /** 渲染进站惊喜抽奖欢迎页；已参与访客直接进入奖品袋。 */
   function render() {
     clearDeckState();
-    message.textContent = data.status === 'published' && data.remaining === 0 ? '首批奖袋已拆完，之后的卡包仅含收藏白卡。' : '';
+    message.textContent = data.status === 'published' && data.remaining === 0 ? '前 40 包实物大奖已经抽完啦，现在拆包还能领虚拟奶蛙小卡片～' : '';
     if (data.joined) {
       body.innerHTML = wall();
       return;
     }
     if (data.status !== 'published') {
-      body.innerHTML = `<div class="frog-copy"><h3>${life[data.status]}</h3><p>奶蛙暗袋 · 第一期</p></div>`;
+      body.innerHTML = `<div class="frog-copy"><h3>${life[data.status]}</h3><p>惊喜抽奖这会儿还没开或者已经收摊啦</p></div>`;
       return;
     }
 
-    const stockPill = data.remaining > 0 ? `首批余 ${data.remaining} 袋` : '仅余收藏白卡';
+    const stockPill = data.remaining > 0 ? `奖池还剩 ${data.remaining} 包` : '实物奖抽完啦 · 可领虚拟奶蛙卡';
     const stepsHtml = ['welcome', 'photo', 'social'].map((slot, idx) =>
       `<li><span>0${idx + 1}</span><b>${names[slot]}</b><em>${shortHints[slot]}</em></li>`
     ).join('');
 
     body.innerHTML = (
       `<div class="frog-layout">` +
-      `<div class="foil-display"><span class="foil-display-glow" aria-hidden="true"></span>${pouch()}<span class="foil-edition-tag" aria-hidden="true">EDITION 01 · FOIL PACK</span></div>` +
+      `<div class="foil-display is-welcome">` +
+      `<span class="foil-display-glow" aria-hidden="true"></span>` +
+      `<span class="frog-hero-ribbon">免费领 3 包</span>` +
+      `<figure class="frog-mascot"><img src="/assets/frog/white-2.webp" alt="比耶打招呼的奶蛙" width="220" height="220" draggable="false"></figure>` +
+      `${pouch()}` +
+      `</div>` +
       `<div class="frog-copy">` +
-      `<div class="frog-eyebrow-row"><small class="frog-eyebrow">限时抽卡活动</small><span class="frog-stock-pill">${stockPill}</span></div>` +
-      `<h3>奶蛙暗袋<span>入场即领一包</span></h3>` +
+      `<div class="frog-eyebrow-row"><small class="frog-eyebrow">每人限领 3 包</small><span class="frog-stock-pill is-hot">${stockPill}</span></div>` +
+      `<h3>惊喜抽奖<span>填个 QQ 马上抽一包</span></h3>` +
+      `<div class="frog-prize-strip" aria-label="本期奖品一览">` +
+      `<span class="frog-prize-pill prism"><i>A♢</i> 星巴克大杯太妃拿铁</span>` +
+      `<span class="frog-prize-pill gold"><i>K♡</i> 奈雪杨枝甘露</span>` +
+      `<span class="frog-prize-pill silver"><i>Q♤</i> 照片冰箱贴</span>` +
+      `<span class="frog-prize-pill white"><i>J♧</i> 奶蛙小卡片（虚拟）</span>` +
+      `</div>` +
       `<ul class="frog-steps">${stepsHtml}</ul>` +
       `<form id="frogForm"><label class="sr-only" for="frogQQ">参与 QQ</label>` +
-      `<input id="frogQQ" inputmode="numeric" autocomplete="off" pattern="[1-9][0-9]{4,11}" maxlength="12" placeholder="输入 QQ 号（仅去重与兑奖）" required>` +
-      `<button class="frog-btn">领取入场包 ↗</button></form>` +
-      `<details class="frog-rules"><summary>奖品与规则</summary>` +
-      `<div class="frog-tier-chips">` +
-      `<span class="frog-tier-chip prism">A♢ 炫彩 · 星巴克太妃拿铁 ×1</span>` +
-      `<span class="frog-tier-chip gold">K♡ 金卡 · 奈雪杨枝甘露 ×2</span>` +
-      `<span class="frog-tier-chip silver">Q♤ 银卡 · 照片冰箱贴 ×5</span>` +
-      `<span class="frog-tier-chip white">J♧ 白卡 · 奶蛙收藏卡 ×32</span>` +
-      `</div>` +
-      `<p>首批 40 袋不放回抽选，抽完后活动期间仍可免费领取收藏白卡。同一 QQ 最多可领 3 包，站主按登记 QQ 联系兑奖。</p>` +
+      `<input id="frogQQ" inputmode="numeric" autocomplete="off" pattern="[1-9][0-9]{4,11}" maxlength="12" placeholder="输入你的 QQ 号" required>` +
+      `<button class="frog-btn frog-btn-primary">马上领第一包 ↗</button></form>` +
+      `<details class="frog-rules"><summary>活动说明</summary>` +
+      `<p>前 40 包里放了 1 杯星巴克大杯太妃拿铁、2 套奈雪杨枝甘露、5 个随机照片冰箱贴和 32 张虚拟奶蛙小卡片，抽完后还能继续拆虚拟奶蛙卡留个纪念。每个 QQ 最多拆 3 包，QQ 只用来防重和中奖联系。</p>` +
       `</details>` +
       `</div></div>`
     );
@@ -301,13 +312,13 @@ export function createRaffleUI({ $, call, auth }) {
     if (eyebrow) {
       eyebrow.innerHTML =
         `<small class="frog-eyebrow">${names[pack.slot]}</small>` +
-        `<span class="frog-tier-badge ${card.tier}">${tierName} · Nº ${String(card.number).padStart(3, '0')}</span>`;
+        `<span class="frog-tier-badge ${card.tier}">#${String(card.number).padStart(3, '0')} · ${tierName}</span>`;
     }
     const h3 = captionEl.querySelector('h3');
     if (h3) h3.textContent = prizeName;
 
     const desc = captionEl.querySelector('.frog-caption-desc');
-    if (desc) desc.textContent = card.tier === 'white' ? '收藏白卡 · 本期专属留念卡面' : '中奖卡片 · 站主将通过登记的 QQ 联系兑奖。';
+    if (desc) desc.textContent = card.tier === 'white' ? '虚拟电子卡（无实物），抽到一只可可爱爱的奶蛙留作纪念～' : '中奖啦！我会通过你留的 QQ 联系你兑奖';
 
     const navEl = captionEl.querySelector('.frog-deck-nav');
     if (navEl && count > 1) {
@@ -681,7 +692,7 @@ export function createRaffleUI({ $, call, auth }) {
 
     const tierAttr = card ? `data-tier="${card.tier}"` : '';
     const eyebrowHtml = card
-      ? `<small class="frog-eyebrow">${names[slot]}</small><span class="frog-tier-badge ${card.tier}">${tiers[card.tier][2]} · Nº ${String(card.number).padStart(3, '0')}</span>`
+      ? `<small class="frog-eyebrow">${names[slot]}</small><span class="frog-tier-badge ${card.tier}">#${String(card.number).padStart(3, '0')} · ${tiers[card.tier][2]}</span>`
       : `<small class="frog-eyebrow">${names[slot]}</small>`;
 
     body.innerHTML = (
@@ -690,11 +701,11 @@ export function createRaffleUI({ $, call, auth }) {
       `<div class="frog-caption">` +
       `<div class="frog-caption-body">` +
       `<div class="frog-eyebrow-row">${eyebrowHtml}</div>` +
-      `<h3>${card ? tiers[card.tier][3] : '沿封口撕开'}</h3>` +
-      `<p class="frog-caption-desc">${card ? (card.tier === 'white' ? '收藏白卡 · 本期专属留念卡面' : '中奖卡片 · 站主将通过登记的 QQ 联系兑奖。') : '横向沿虚线撕开封口，或轻点卡包直接拆封'}</p>` +
+      `<h3>${card ? tiers[card.tier][3] : '撕开看看抽中了啥'}</h3>` +
+      `<p class="frog-caption-desc">${card ? (card.tier === 'white' ? '虚拟电子卡（无实物），抽到一只可可爱爱的奶蛙留作纪念～' : '中奖啦！我会通过你留的 QQ 联系你兑奖') : '横着滑开顶上的撕口，或者直接点一下拆包'}</p>` +
       `</div>` +
       `${nav}${dots}` +
-      `${btn('wall', card ? '返回我的卡包' : '返回', 'frog-link')}` +
+      `${btn('wall', card ? '回到我的奖品袋' : '返回', 'frog-link')}` +
       `</div></div>`
     );
 
@@ -741,7 +752,7 @@ export function createRaffleUI({ $, call, auth }) {
 
   async function refresh() {
     const id = ++version;
-    message.textContent = '正在读取卡包…';
+    message.textContent = '正在打开奖品袋…';
     try {
       await visiting;
       const next = await call('');
@@ -751,7 +762,7 @@ export function createRaffleUI({ $, call, auth }) {
     } catch (e) {
       if (id === version) {
         message.textContent = e.message;
-        body.innerHTML = btn('reload', '重新读取');
+        body.innerHTML = btn('reload', '重新加载');
       }
     }
   }
@@ -772,7 +783,7 @@ export function createRaffleUI({ $, call, auth }) {
     button.dataset.opening = '1';
     torn?.classList.add('is-developing');
     body.querySelector('.frog-link').disabled = true;
-    message.textContent = '正在显影…';
+    message.textContent = '拆包中…';
     try {
       const [next] = await Promise.all([call('/draw', { slot }), finishTear(button, fromDrag)]);
       if (id !== version) return;
@@ -781,7 +792,7 @@ export function createRaffleUI({ $, call, auth }) {
     } catch (e) {
       if (id === version) {
         message.textContent = e.message;
-        body.innerHTML = btn('reload', '查看我的卡包');
+        body.innerHTML = btn('reload', '回到我的奖品袋');
       }
     } finally {
       busy = false;
@@ -809,11 +820,11 @@ export function createRaffleUI({ $, call, auth }) {
 
   async function admin(op = 'list', number) {
     const box = $('#frogAdminBody'), note = $('#frogAdminMessage');
-    note.textContent = '读取中…';
+    note.textContent = '正在读取中奖名单…';
     try {
       const res = await call('/admin', { ...auth(), action: op, number });
       note.textContent = '';
-      box.innerHTML = `<p>${life[res.status]} · 已拆 ${res.rows.length} 包 · 首批余 ${res.remaining} 袋</p>${res.status === 'published' ? btn('pause', '暂停') : res.status === 'paused' ? btn('publish', '重新发布') : ''}${res.status !== 'ended' ? btn('ask-end', '结束并留档') : ''}<ol class="frog-records">${res.rows.map(r => `<li>#${r.number} · ${tiers[r.tier][2]} · QQ ${r.qq} ${r.tier === 'white' ? '' : r.claimed ? '已兑付' : btn('claim:' + r.number, '标记已兑付')}</li>`).join('')}</ol>`;
+      box.innerHTML = `<p>${life[res.status]} · 已拆 ${res.rows.length} 包 · 奖池还剩 ${res.remaining} 包</p>${res.status === 'published' ? btn('pause', '暂停') : res.status === 'paused' ? btn('publish', '重新发布') : ''}${res.status !== 'ended' ? btn('ask-end', '结束并留档') : ''}<ol class="frog-records">${res.rows.map(r => `<li>#${r.number} · ${tiers[r.tier][2]} · QQ ${r.qq} ${r.tier === 'white' ? '' : r.claimed ? '已兑付' : btn('claim:' + r.number, '标记已兑付')}</li>`).join('')}</ol>`;
     } catch (e) {
       box.replaceChildren();
       note.textContent = e.message;
@@ -826,8 +837,8 @@ export function createRaffleUI({ $, call, auth }) {
       if (!active || data?.packs.find(v => v.slot === slot)?.earned) return;
       const next = await call(action, payload);
       remember(next);
-      if (next.packs.find(v => v.slot === slot)?.earned) toast(names[slot] + '已解锁');
-    }).catch(() => { toast('卡包进度未同步，请重新打开照片或查看卡包'); });
+      if (next.packs.find(v => v.slot === slot)?.earned) toast(`叮！多拿到一包「${names[slot]}」，点右下角去拆吧`);
+    }).catch(() => { toast('刚刚那包没领到，刷新或点开我的抽奖试试'); });
   }
 
   return {

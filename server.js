@@ -129,7 +129,7 @@ function cosDelete(key) {
 const LOCAL_FILE = path.join(DATA_DIR, 'interactions.json');
 const useCos = Boolean(COS_SECRET_ID && COS_SECRET_KEY);
 
-const raffleKey = index => `private/darkbag-01/${String(index).padStart(4,'0')}.json`;
+const raffleKey = index => `private/darkbag-02/${String(index).padStart(4,'0')}.json`;
 function insertRaffleObject(key,text) {
   return new Promise((resolve,reject)=>cos.putObject({Bucket:COS_BUCKET,Region:COS_REGION,Key:key,ACL:'private',Body:Buffer.from(text),Headers:{'x-cos-forbid-overwrite':'true'}},error=>{
     if(!error) resolve(true); else if(error.statusCode===409 && ['ObjectAlreadyExists','FileAlreadyExists'].includes(error.code||error.error?.Code)) resolve(false); else reject(error);
@@ -138,7 +138,7 @@ function insertRaffleObject(key,text) {
 let raffleStorageChecked=false;
 async function checkRaffleStorage() {
   if(!useCos||raffleStorageChecked)return;
-  const key='private/darkbag-01/storage-check.json';
+  const key='private/darkbag-02/storage-check.json';
   if(await insertRaffleObject(key,'{}') && await insertRaffleObject(key,'{}')) throw new HttpError(503,'奖池存储未启用防覆盖，暂时不能参与');
   raffleStorageChecked=true;
 }
@@ -207,7 +207,7 @@ const EMPTY = () => ({ likes: [], comments: [] });
 function normalize(raw) {
   const out = {
     photos: Object.create(null),
-    rafflePending: raw?.rafflePending || {},
+    rafflePendingV2: raw?.rafflePendingV2 || {},
     voting: {
       config: null,
       votes: Object.create(null),

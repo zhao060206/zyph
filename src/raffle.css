@@ -1,100 +1,122 @@
-/* 奶蛙暗袋 · 抽卡与藏品展台样式（支持亮/暗双主题与 full/lite/none 三档动效） */
+/* 惊喜抽奖 · 醒目弹窗与奶蛙抽卡展台样式（支持亮/暗双主题与 full/lite/none 三档动效） */
 
 /* ===== 1. 活动页面入口横幅与悬浮返回按钮 ===== */
 .frog-entry {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
   margin: 0 0 2rem;
-  padding: 16px 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--text);
+  padding: 14px 18px;
+  border: 1.5px solid rgba(217, 119, 6, .34);
+  border-radius: 14px;
+  background: linear-gradient(125deg, #fffaf0 0%, #fff2d8 60%, var(--panel) 100%);
+  color: #261b12;
   cursor: pointer;
   text-align: left;
-  transition: border-color .24s var(--ease), background-color .24s var(--ease), transform .24s var(--ease), box-shadow .24s var(--ease);
+  box-shadow: 0 8px 24px rgba(180, 98, 22, .08);
+  transition: border-color .24s var(--ease), transform .24s var(--ease), box-shadow .24s var(--ease);
+}
+
+html[data-theme=dark] .frog-entry {
+  border-color: rgba(251, 191, 36, .34);
+  background: linear-gradient(125deg, rgba(66, 46, 24, .75) 0%, rgba(44, 32, 46, .75) 62%, var(--panel) 100%);
+  color: var(--text);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
 }
 
 .frog-entry:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-subtle);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 26px rgba(18, 16, 22, .07);
+  border-color: rgba(217, 119, 6, .62);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(180, 98, 22, .15);
 }
 
 html[data-theme=dark] .frog-entry:hover {
-  box-shadow: 0 12px 28px rgba(0, 0, 0, .35);
+  border-color: rgba(251, 191, 36, .62);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .48);
 }
 
-.frog-stamp {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  height: 48px;
-  padding: 3px 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--surface-subtle), var(--panel));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
-  transform: rotate(-6deg);
-  font: italic 600 17px/1 Georgia, serif;
-  letter-spacing: -.02em;
+.frog-entry-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  box-shadow: 0 6px 14px rgba(120, 66, 18, .2);
+  background: #fdecc8;
+  transform: rotate(-4deg);
   flex-shrink: 0;
-  transition: transform .28s var(--ease);
+  transition: transform .26s var(--ease);
 }
 
-.frog-stamp i {
-  font: normal 11px/1 Georgia, serif;
-  opacity: .78;
+.frog-entry-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.frog-entry:hover .frog-stamp {
-  transform: rotate(-2deg) scale(1.04);
+.frog-entry:hover .frog-entry-avatar {
+  transform: rotate(0deg) scale(1.06);
 }
 
 .frog-entry-copy {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .frog-entry-copy strong {
-  font: 500 18px/1.25 var(--serif, serif);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 18px/1.25 var(--serif, serif);
   letter-spacing: -.01em;
 }
 
-.frog-entry-copy em {
-  font: 400 11.5px/1.4 var(--mono, monospace);
+.frog-entry-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e16a18;
+  color: #fff;
+  font: 600 10.5px/1.2 var(--sans);
   font-style: normal;
-  letter-spacing: .04em;
-  color: var(--muted);
+  letter-spacing: .02em;
+}
+
+.frog-entry-copy em {
+  font: 400 12.5px/1.4 var(--sans);
+  font-style: normal;
+  color: #6b523d;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+html[data-theme=dark] .frog-entry-copy em {
+  color: rgba(242, 236, 224, .76);
+}
+
 .frog-entry small {
   margin-left: auto;
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  font: 500 12px/1 var(--sans);
-  color: var(--text);
+  background: linear-gradient(135deg, #e06312, #c2410c);
+  font: 600 12.5px/1 var(--sans);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(194, 65, 12, .28);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: border-color .22s var(--ease), transform .22s var(--ease);
+  transition: transform .22s var(--ease), filter .22s var(--ease);
 }
 
 .frog-entry:hover small {
-  border-color: var(--border-strong);
   transform: translateX(2px);
+  filter: brightness(1.06);
 }
 
 .frog-modal[hidden],
@@ -110,42 +132,48 @@ html[data-theme=dark] .frog-entry:hover {
   z-index: 80;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 15px;
+  gap: 8px;
+  padding: 4px 15px 4px 6px;
   min-height: 42px;
   border-radius: 999px;
-  background: #2b2030;
-  color: #f8f5f9;
-  border: 1px solid rgba(255, 255, 255, .18);
-  box-shadow: 0 10px 26px rgba(18, 12, 24, .28);
-  font: 500 13px/1 var(--sans);
+  background: linear-gradient(135deg, #2e202c, #492a35);
+  color: #fff8ee;
+  border: 1.5px solid rgba(251, 191, 36, .48);
+  box-shadow: 0 10px 26px rgba(26, 12, 20, .32);
+  font: 600 13px/1 var(--sans);
   cursor: pointer;
-  transition: transform .22s var(--ease), box-shadow .22s var(--ease), background-color .22s var(--ease);
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease), filter .22s var(--ease);
 }
 
 .frog-return:hover {
   transform: translateY(-2px);
-  background: #382a3f;
-  box-shadow: 0 14px 30px rgba(18, 12, 24, .34);
+  filter: brightness(1.08);
+  box-shadow: 0 14px 30px rgba(26, 12, 20, .4);
 }
 
-.frog-return-mark {
-  font: normal 13px/1 Georgia, serif;
-  color: #e6c6ef;
+.frog-return-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, .75);
+  background: #fdecc8;
+  flex-shrink: 0;
 }
 
 .frog-return[data-unopened]::after {
   content: attr(data-unopened);
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
-  height: 18px;
+  min-width: 19px;
+  height: 19px;
   padding: 0 5px;
-  margin-left: 2px;
+  margin-left: 1px;
   border-radius: 999px;
-  background: #d96b6b;
+  background: #ef4444;
   color: #fff;
-  font: 600 11px/1 var(--mono, monospace);
+  font: 700 11px/1 var(--mono, monospace);
+  box-shadow: 0 2px 6px rgba(239, 68, 68, .4);
 }
 
 html[data-dialog-open=true] #frogReturn {
@@ -157,53 +185,59 @@ html[data-dialog-open=true] #frogReturn {
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  padding: 9px 18px;
+  padding: 10px 18px;
   border-radius: 999px;
-  background: #241c28;
-  color: #f7f4f9;
-  border: 1px solid rgba(255, 255, 255, .14);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  background: #271b24;
+  color: #fff8ee;
+  border: 1px solid rgba(251, 191, 36, .45);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .34);
   z-index: 10010;
   pointer-events: none;
   font: 500 13px/1.3 var(--sans);
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* ===== 2. 弹窗主体与亮/暗双主题变量 ===== */
+/* ===== 2. 弹窗主体与明快惊喜风双主题变量 ===== */
 .frog-modal {
-  --frog-bg: #f3efe9;
-  --frog-surface: #fbf9f6;
-  --frog-ink: #1e1923;
-  --frog-muted: #645c6a;
-  --frog-line: rgba(30, 25, 35, .11);
-  --frog-line-strong: rgba(30, 25, 35, .24);
-  --frog-accent: #523959;
+  --frog-bg: #fffbf4;
+  --frog-surface: #ffffff;
+  --frog-ink: #1e1714;
+  --frog-muted: #6c5b52;
+  --frog-line: rgba(120, 74, 34, .14);
+  --frog-line-strong: rgba(120, 74, 34, .26);
+  --frog-accent: #c2590c;
   --frog-accent-ink: #ffffff;
-  --frog-accent-soft: rgba(82, 57, 89, .09);
-  --frog-stage-bg: radial-gradient(ellipse at 48% 26%, #fcfaf8 0%, #e7dee3 68%, #d6ccd2 100%);
+  --frog-accent-soft: rgba(234, 88, 12, .10);
+  --frog-cta: linear-gradient(135deg, #e06312 0%, #c2410c 100%);
+  --frog-stage-bg: radial-gradient(ellipse at 48% 26%, #fffcf7 0%, #f1e3d3 68%, #e2cfc0 100%);
   position: fixed;
   inset: 0;
   z-index: 9900;
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(16, 12, 20, .72);
+  background: rgba(18, 12, 16, .74);
   color: var(--frog-ink);
   overflow: auto;
   overscroll-behavior: contain;
 }
 
 html[data-theme=dark] .frog-modal {
-  --frog-bg: #18151d;
-  --frog-surface: #221e28;
-  --frog-ink: #f3eff7;
-  --frog-muted: #a69bb0;
-  --frog-line: rgba(243, 239, 247, .12);
-  --frog-line-strong: rgba(243, 239, 247, .24);
-  --frog-accent: #cfb0dc;
-  --frog-accent-ink: #19131d;
-  --frog-accent-soft: rgba(207, 176, 220, .14);
-  --frog-stage-bg: radial-gradient(ellipse at 48% 26%, #2f2737 0%, #1d1823 70%, #141018 100%);
-  background: rgba(6, 5, 10, .80);
+  --frog-bg: #1b161d;
+  --frog-surface: #251f28;
+  --frog-ink: #fbf6f0;
+  --frog-muted: #b8a89d;
+  --frog-line: rgba(255, 224, 178, .13);
+  --frog-line-strong: rgba(255, 224, 178, .25);
+  --frog-accent: #fbbf24;
+  --frog-accent-ink: #1d1409;
+  --frog-accent-soft: rgba(251, 191, 36, .15);
+  --frog-cta: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --frog-stage-bg: radial-gradient(ellipse at 48% 26%, #332737 0%, #201925 70%, #151019 100%);
+  background: rgba(6, 5, 10, .82);
 }
 
 html[data-motion=full] .frog-modal:not([hidden]) {
@@ -218,15 +252,17 @@ html[data-motion=lite] .frog-modal:not([hidden]) {
 
 .frog-panel {
   box-sizing: border-box;
-  width: min(768px, 100%);
+  width: min(784px, 100%);
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow: auto;
-  padding: 16px clamp(20px, 3.2vw, 36px) 28px;
-  background: var(--frog-bg);
+  padding: 18px clamp(20px, 3.2vw, 36px) 28px;
+  background:
+    linear-gradient(90deg, #f59e0b 0%, #f97316 42%, #ec4899 78%, #8b5cf6 100%) 0 0 / 100% 4px no-repeat,
+    var(--frog-bg);
   border: 1px solid var(--frog-line-strong);
   border-radius: 22px;
-  box-shadow: 0 28px 80px rgba(8, 5, 12, .38);
+  box-shadow: 0 28px 80px rgba(10, 6, 12, .42), 0 0 0 1px rgba(255, 255, 255, .18) inset;
   font: 15px/1.55 var(--sans, sans-serif);
 }
 
@@ -249,33 +285,62 @@ html[data-motion=lite] .frog-modal:not([hidden]) .frog-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--frog-line);
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .frog-panel-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.frog-brand-dot {
-  font: normal 12px/1 Georgia, serif;
-  color: var(--frog-accent);
+.frog-brand-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--frog-accent);
+  background: #fdecc8;
+  flex-shrink: 0;
 }
 
-.frog-panel header span,
+.frog-panel-brand strong {
+  font: 700 16px/1.2 var(--sans);
+  letter-spacing: -.01em;
+  color: var(--frog-ink);
+}
+
+.frog-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .14);
+  color: #047857;
+  font: 600 11px/1.1 var(--sans);
+}
+
+html[data-theme=dark] .frog-live-tag {
+  background: rgba(52, 211, 153, .16);
+  color: #6ee7b7;
+}
+
+.frog-live-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .frog-eyebrow,
 .frog-card small {
-  font: 500 10.5px/1.4 ui-monospace, monospace;
-  letter-spacing: .14em;
+  font: 600 11px/1.3 var(--sans);
+  letter-spacing: .04em;
   color: var(--frog-muted);
-}
-
-.frog-panel header i {
-  margin: 0 6px;
-  opacity: .5;
 }
 
 .frog-panel header button,
@@ -304,34 +369,81 @@ html[data-motion=lite] .frog-modal:not([hidden]) .frog-panel {
   outline-offset: 2px;
 }
 
-/* ===== 3. 欢迎页与卡包墙布局 ===== */
+/* ===== 3. 欢迎页与奖品袋（奶蛙主角 + 银箔卡包主视觉） ===== */
 .frog-layout {
   display: grid;
   grid-template-columns: 0.96fr 1.04fr;
   align-items: center;
-  gap: clamp(22px, 4vw, 44px);
+  gap: clamp(20px, 3.8vw, 40px);
 }
 
 .foil-display {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 360px;
-  padding: 24px 16px 34px;
+  min-height: 368px;
+  padding: 24px 16px 32px;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, .1);
-  background: radial-gradient(ellipse at 42% 20%, #574558 0%, #2b2330 56%, #17131c 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(251, 191, 36, .28);
+  background: radial-gradient(ellipse at 36% 24%, #6a4449 0%, #382534 56%, #1c131f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 14px 32px rgba(24, 14, 20, .18);
   isolation: isolate;
 }
 
 .foil-display-glow {
   position: absolute;
-  width: 240px;
-  height: 240px;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(224, 185, 240, .24) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(253, 211, 108, .34) 0%, rgba(244, 143, 177, .12) 48%, transparent 72%);
   pointer-events: none;
+}
+
+.frog-hero-ribbon {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 4;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fde047, #f59e0b);
+  color: #291804;
+  font: 700 11.5px/1.1 var(--sans);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .28);
+  transform: rotate(-4deg);
+  pointer-events: none;
+}
+
+.frog-mascot {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  width: min(62%, 190px);
+  aspect-ratio: 1;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 2.5px solid rgba(255, 248, 232, .88);
+  background: #fdf1dc;
+  box-shadow: 0 18px 34px rgba(10, 6, 14, .48);
+  transform: translate(-15%, 4%) rotate(-5deg);
+}
+
+.frog-mascot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+html[data-motion=full] .frog-mascot {
+  animation: frog-bob 4.8s ease-in-out infinite;
+}
+
+@keyframes frog-bob {
+  0%, 100% { transform: translate(-15%, 4%) rotate(-5deg); }
+  50% { transform: translate(-15%, -1%) rotate(-3.5deg); }
 }
 
 .foil-edition-tag {
@@ -339,11 +451,15 @@ html[data-motion=lite] .frog-modal:not([hidden]) .frog-panel {
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  font: 500 9.5px/1 ui-monospace, monospace;
-  letter-spacing: .2em;
-  color: rgba(246, 238, 252, .48);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(18, 12, 22, .56);
+  border: 1px solid rgba(255, 255, 255, .14);
+  font: 600 11px/1.1 var(--sans);
+  color: rgba(255, 246, 232, .9);
   white-space: nowrap;
   pointer-events: none;
+  z-index: 3;
 }
 
 .foil-pouch,
@@ -354,8 +470,10 @@ html[data-motion=lite] .frog-modal:not([hidden]) .frog-panel {
 }
 
 .foil-display .foil-pouch {
-  width: min(64%, 192px);
-  transform: rotate(-6.5deg);
+  grid-area: 1 / 1;
+  z-index: 1;
+  width: min(49%, 150px);
+  transform: translate(33%, 8%) rotate(9deg);
   filter: drop-shadow(8px 18px 24px rgba(8, 4, 12, .62));
 }
 
@@ -364,8 +482,8 @@ html[data-motion=full] .foil-display .foil-pouch {
 }
 
 @keyframes foil-hover {
-  0%, 100% { transform: rotate(-6.5deg) translateY(0); }
-  50% { transform: rotate(-5.2deg) translateY(-5px); }
+  0%, 100% { transform: translate(33%, 8%) rotate(9deg); }
+  50% { transform: translate(33%, 3%) rotate(11deg); }
 }
 
 .foil-top,
@@ -393,8 +511,8 @@ html[data-motion=full] .foil-display .foil-pouch {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-bottom: .55rem;
+  gap: 8px 10px;
+  margin-bottom: .45rem;
 }
 
 .frog-eyebrow-row .frog-eyebrow {
@@ -405,26 +523,26 @@ html[data-motion=full] .foil-display .foil-pouch {
 .frog-stock-pill {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--frog-accent-soft);
-  border: 1px solid var(--frog-line);
-  font: 500 11px/1.2 var(--sans);
-  color: var(--frog-ink);
+  border: 1px solid rgba(234, 88, 12, .28);
+  font: 600 11.5px/1.2 var(--sans);
+  color: var(--frog-accent);
 }
 
 .frog-copy h3,
 .frog-caption h3 {
   margin: 0;
   color: var(--frog-ink);
-  font: 500 clamp(30px, 4.2vw, 46px)/1.12 var(--serif, Georgia, serif);
-  letter-spacing: -.035em;
+  font: 600 clamp(28px, 3.8vw, 40px)/1.12 var(--serif, Georgia, serif);
+  letter-spacing: -.03em;
 }
 
 .frog-copy h3 span {
   display: block;
-  margin-top: .45rem;
-  font: 500 19px/1.3 var(--serif, serif);
+  margin-top: .35rem;
+  font: 500 16.5px/1.35 var(--sans);
   letter-spacing: 0;
   color: var(--frog-muted);
 }
@@ -433,23 +551,61 @@ html[data-motion=full] .foil-display .foil-pouch {
 .frog-caption p {
   color: var(--frog-muted);
   font-size: 13.5px;
-  line-height: 1.65;
-  margin: .6rem 0 1rem;
+  line-height: 1.6;
+  margin: .5rem 0 .85rem;
 }
+
+/* 直接露出的四档奖品小亮条 */
+.frog-prize-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 12px 0 10px;
+}
+
+.frog-prize-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  font: 500 11.5px/1.2 var(--sans);
+  border: 1px solid var(--frog-line);
+  background: var(--frog-surface);
+  color: var(--frog-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frog-prize-pill i {
+  font: italic 600 11px/1 Georgia, serif;
+  padding: 2px 5px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.frog-prize-pill.prism { border-color: rgba(139, 92, 246, .35); }
+.frog-prize-pill.prism i { background: linear-gradient(120deg, #ddd6fe, #bae6fd, #fde68a); color: #2e1d4a; }
+.frog-prize-pill.gold { border-color: rgba(217, 119, 6, .35); }
+.frog-prize-pill.gold i { background: #fef08a; color: #713f12; }
+.frog-prize-pill.silver { border-color: rgba(100, 116, 139, .32); }
+.frog-prize-pill.silver i { background: #e2e8f0; color: #334155; }
+.frog-prize-pill.white i { background: #f3ece0; color: #574c41; }
 
 .frog-steps {
   list-style: none;
-  margin: 14px 0 16px;
+  margin: 10px 0 14px;
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .frog-steps li {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 8px;
   background: var(--frog-surface);
   border: 1px solid var(--frog-line);
@@ -482,9 +638,9 @@ html[data-motion=full] .foil-display .foil-pouch {
 .frog-panel input {
   width: 100%;
   box-sizing: border-box;
-  min-height: 44px;
-  border: 1px solid var(--frog-line-strong);
-  border-radius: 10px;
+  min-height: 46px;
+  border: 1.5px solid var(--frog-line-strong);
+  border-radius: 11px;
   padding: 0 14px;
   background: var(--frog-surface);
   color: var(--frog-ink);
@@ -498,29 +654,31 @@ html[data-motion=full] .foil-display .foil-pouch {
   outline: none;
 }
 
-.frog-btn {
-  min-height: 44px;
-  padding: 9px 18px;
-  color: var(--frog-accent-ink);
-  background: var(--frog-accent);
+.frog-panel .frog-btn {
+  min-height: 46px;
+  padding: 10px 18px;
+  color: var(--frog-accent-ink, #fff);
+  background: var(--frog-cta, linear-gradient(135deg, #e06312 0%, #c2410c 100%));
   border: 0;
-  border-radius: 10px;
+  border-radius: 11px;
   cursor: pointer;
-  font: 500 14px/1 var(--sans);
-  transition: transform .18s var(--ease), filter .18s var(--ease);
+  font: 600 14.5px/1 var(--sans);
+  box-shadow: 0 8px 20px rgba(194, 65, 12, .26);
+  transition: transform .18s var(--ease), filter .18s var(--ease), box-shadow .18s var(--ease);
 }
 
-.frog-btn:hover:not(:disabled) {
-  filter: brightness(1.08);
+.frog-panel .frog-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
   transform: translateY(-1px);
+  box-shadow: 0 11px 24px rgba(194, 65, 12, .34);
 }
 
-.frog-btn:active:not(:disabled) {
+.frog-panel .frog-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
 .frog-rules {
-  margin-top: 12px;
+  margin-top: 10px;
   color: var(--frog-muted);
   font-size: 12px;
 }
@@ -534,31 +692,8 @@ html[data-motion=full] .foil-display .foil-pouch {
 
 .frog-rules p {
   font-size: 12px;
-  margin: .5rem 0 0;
+  margin: .45rem 0 0;
 }
-
-.frog-tier-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.frog-tier-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  border: 1px solid var(--frog-line);
-  background: var(--frog-surface);
-  color: var(--frog-ink);
-}
-
-.frog-tier-chip.prism { border-color: rgba(143, 128, 198, .48); }
-.frog-tier-chip.gold { border-color: rgba(188, 138, 48, .48); }
-.frog-tier-chip.silver { border-color: rgba(126, 138, 148, .48); }
 
 /* 收藏进度条与卡包槽位 */
 .frog-meter {
@@ -1400,8 +1535,17 @@ html[data-motion=none] .frog-card-glare {
 /* ===== 8. 移动端与紧凑屏响应式 ===== */
 @media (max-width: 620px) {
   .frog-entry {
-    padding: 14px 12px;
-    gap: 12px;
+    padding: 12px;
+    gap: 11px;
+  }
+
+  .frog-entry-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .frog-entry-copy strong {
+    font-size: 16px;
   }
 
   .frog-entry-copy em {
@@ -1409,56 +1553,93 @@ html[data-motion=none] .frog-card-glare {
   }
 
   .frog-panel {
-    padding: 10px 16px 20px;
+    padding: 12px 16px 20px;
     border-radius: 18px;
   }
 
   .frog-panel header {
-    margin-bottom: 14px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
   }
 
   .frog-layout,
   .frog-opening {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
   }
 
   .foil-display {
     min-height: 0;
-    height: clamp(134px, 23vh, 210px);
-    padding: 14px 14px 26px;
+    height: clamp(144px, 23vh, 186px);
+    padding: 12px 14px 22px;
+  }
+
+  .frog-hero-ribbon {
+    top: 10px;
+    left: 10px;
+    font-size: 10.5px;
+    padding: 4px 9px;
+  }
+
+  .frog-mascot {
+    width: auto;
+    height: 78%;
+    transform: translate(-34%, 2%) rotate(-5deg);
+  }
+
+  @keyframes frog-bob {
+    0%, 100% { transform: translate(-34%, 2%) rotate(-5deg); }
+    50% { transform: translate(-34%, -2%) rotate(-3.5deg); }
   }
 
   .foil-display .foil-pouch {
     width: auto;
-    height: 82%;
+    height: 76%;
+    transform: translate(42%, 4%) rotate(9deg);
+  }
+
+  @keyframes foil-hover {
+    0%, 100% { transform: translate(42%, 4%) rotate(9deg); }
+    50% { transform: translate(42%, 0%) rotate(11deg); }
   }
 
   .frog-copy h3 {
-    font-size: 30px;
+    font-size: 26px;
   }
 
   .frog-copy h3 span {
     display: inline;
-    margin-left: 10px;
-    font-size: 15px;
+    margin-left: 8px;
+    font-size: 13.5px;
     white-space: nowrap;
   }
 
   .frog-copy p {
-    margin: .45rem 0 .7rem;
+    margin: .35rem 0 .6rem;
+  }
+
+  .frog-prize-strip {
+    gap: 5px;
+    margin: 8px 0;
+  }
+
+  .frog-prize-pill {
+    padding: 5px 7px;
+    font-size: 11px;
   }
 
   .frog-steps {
-    margin: 10px 0 12px;
+    margin: 8px 0 10px;
+    gap: 4px;
   }
 
   .frog-panel form {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .frog-btn {
+  .frog-panel .frog-btn {
     padding-inline: 14px;
+    font-size: 13.5px;
   }
 
   /* 移动端保持展台与主卡足够上下安全留白，绝不溢出边界 */

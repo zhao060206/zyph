@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 const stock = { white:32, silver:5, gold:2, prism:1 };
 const owner = req => {
-  const raw = /(?:^|;\s*)pt_darkbag=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '');
+  const raw = /(?:^|;\s*)pt_darkbag_v2=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '');
   return raw && crypto.createHash('sha256').update(raw[1]).digest('hex');
 };
 
@@ -49,7 +49,7 @@ module.exports = function createRaffle(adapter) {
     return {status:s.status,remaining:s.remaining,joined:!!pending||!!own.length,packs,result:result(own[own.length-1])};
   }
   function mark(req,store,key,kind,id,ts) {
-    const entry=store.rafflePending[owner(req)];
+    const entry=store.rafflePendingV2[owner(req)];
     if (!entry || entry.marks.some(m=>m.kind===kind&&m.id===id&&m.ts===ts&&m.key===key)) return;
     entry.marks=[{key,kind,id,ts},...entry.marks.filter(m=>m.kind!==kind||m.key!==key)].slice(0,20);
   }
@@ -59,7 +59,7 @@ module.exports = function createRaffle(adapter) {
     if(!['/status','/join','/photo','/draw','/admin'].includes(action)) fail(404,'未知操作');
     if(!rateLimit(ip,'raffle'+action,action==='/join'?20:100,60000)) fail(429,'操作过于频繁');
     if(action==='/admin') requireAdmin(body);
-    let key=owner(req);if(action!=='/status'||key||now()-lastChecked>=3000)await sync();const s=state();let pending=store.rafflePending[key];
+    let key=owner(req);if(action!=='/status'||key||now()-lastChecked>=3000)await sync();const s=state();let pending=store.rafflePendingV2[key];
     if(action==='/admin') {
       const op=body.action||'list';
       if(op==='claim') {
@@ -74,7 +74,7 @@ module.exports = function createRaffle(adapter) {
     }
     const own=s.byOwner.get(key)||[];
     if(!pending&&own.length && s.status==='published') {
-      pending=store.rafflePending[key]={qq:own[0].qq,ts:now(),marks:[]};await persist();
+      pending=store.rafflePendingV2[key]={qq:own[0].qq,ts:now(),marks:[]};await persist();
     }
     if(pending&&!pending.social&&pending.marks.length&&s.status==='published'&&(action==='/status'||action==='/draw'&&body.slot==='social')) {
       const {keys}=await catalog();
@@ -90,10 +90,10 @@ module.exports = function createRaffle(adapter) {
       if(s.byQQ.has(qq)&&s.byQQ.get(qq)!==key) fail(409,'这个 QQ 已在其他浏览器参与本期活动');
       if(!pending) {
         const raw=crypto.randomBytes(32).toString('hex'); key=crypto.createHash('sha256').update(raw).digest('hex');
-        for(const [id,entry] of Object.entries(store.rafflePending)) if(now()-entry.ts>30*86400000) delete store.rafflePending[id];
-        if(Object.keys(store.rafflePending).length>=5000) fail(503,'参与人数较多，请稍后再试');
-        pending=store.rafflePending[key]={qq,ts:now(),albums:[],marks:[]}; await persist();
-        res.setHeader('Set-Cookie',`pt_darkbag=${raw}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=15552000${req.socket.encrypted||req.headers['x-forwarded-proto']==='https'?'; Secure':''}`);
+        for(const [id,entry] of Object.entries(store.rafflePendingV2)) if(now()-entry.ts>30*86400000) delete store.rafflePendingV2[id];
+        if(Object.keys(store.rafflePendingV2).length>=5000) fail(503,'参与人数较多，请稍后再试');
+        pending=store.rafflePendingV2[key]={qq,ts:now(),albums:[],marks:[]}; await persist();
+        res.setHeader('Set-Cookie',`pt_darkbag_v2=${raw}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=15552000${req.socket.encrypted||req.headers['x-forwarded-proto']==='https'?'; Secure':''}`);
       } else if(pending.qq!==qq) fail(409,'当前浏览器已登记其他 QQ');
     } else {
       if(!pending) fail(401,'请先填写 QQ，并允许本站保存参与凭证');
@@ -110,7 +110,7 @@ module.exports = function createRaffle(adapter) {
     return json(res,200,publicState(s,key,pending));
   }
   return {route,mark,participating:(req,store)=>{
-    const key=owner(req);if(!key||!store.rafflePending[key])return false;
-    return !store.rafflePending[key].social && state().status==='published';
+    const key=owner(req);if(!key||!store.rafflePendingV2[key])return false;
+    return !store.rafflePendingV2[key].social && state().status==='published';
   }};
 };
