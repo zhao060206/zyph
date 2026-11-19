@@ -818,15 +818,65 @@ export function createRaffleUI({ $, call, auth }) {
     } catch { /* 活动状态未拉取成功时静默降级，不阻断相册主体浏览。 */ }
   }
 
-  async function admin(op = 'list', number) {
+  let lastAdminRes = null;
+
+  /** 管理员控台：拉取/操作抽奖生命周期、四档库存、单张卡档位替换与回池。 */
+  async function admin(op = 'list', payload = {}) {
     const box = $('#frogAdminBody'), note = $('#frogAdminMessage');
-    note.textContent = '正在读取中奖名单…';
+    const bodyPayload = typeof payload === 'number' ? { number: payload } : (payload || {});
+    note.textContent = op === 'list' ? '正在读取中奖名单…' : '正在提交更改…';
     try {
-      const res = await call('/admin', { ...auth(), action: op, number });
-      note.textContent = '';
-      box.innerHTML = `<p>${life[res.status]} · 已拆 ${res.rows.length} 包 · 奖池还剩 ${res.remaining} 包</p>${res.status === 'published' ? btn('pause', '暂停') : res.status === 'paused' ? btn('publish', '重新发布') : ''}${res.status !== 'ended' ? btn('ask-end', '结束并留档') : ''}<ol class="frog-records">${res.rows.map(r => `<li>#${r.number} · ${tiers[r.tier][2]} · QQ ${r.qq} ${r.tier === 'white' ? '' : r.claimed ? '已兑付' : btn('claim:' + r.number, '标记已兑付')}</li>`).join('')}</ol>`;
+      const res = await call('/admin', { ...auth(), action: op, ...bodyPayload });
+      lastAdminRes = res;
+      const tierLabel = t => tiers[t]?.[2] || t;
+      if (op === 'override') note.textContent = `已将 #${bodyPayload.number} 改为${tierLabel(bodyPayload.tier)}${bodyPayload.returnToPool ? '并同步更新奖池' : ''}`;
+      else if (op === 'claim') note.textContent = `已标记 #${bodyPayload.number} 为已兑付`;
+      else if (op === 'pause') note.textContent = '已暂停本期抽奖';
+      else if (op === 'publish') note.textContent = '已重新开放本期抽奖';
+      else if (op === 'end') note.textContent = '本期抽奖已永久结束并留档';
+      else note.textContent = '';
+
+      const left = res.left || { prism: 0, gold: 0, silver: 0, white: 0 };
+      const stockChips = ['prism', 'gold', 'silver', 'white']
+        .map(k => `<span class="frog-record-tag ${k}">${tierLabel(k)} 余 ${left[k] ?? 0}</span>`)
+        .join('');
+      const lifecycleBtns =
+        `${res.status === 'published' ? btn('pause', '暂停', 'admin-btn frog-admin-btn') : res.status === 'paused' ? btn('publish', '重新发布', 'admin-btn frog-admin-btn') : ''}` +
+        `${res.status !== 'ended' ? btn('ask-end', '结束并留档', 'admin-btn frog-admin-btn is-danger') : ''}`;
+
+      const listHtml = res.rows.map(r => {
+        const claimHtml = r.tier === 'white'
+          ? ''
+          : r.claimed
+            ? '<span class="frog-record-claimed">已兑付</span>'
+            : btn('claim:' + r.number, '标记已兑付', 'admin-btn frog-admin-btn');
+        const editOps = res.status !== 'ended'
+          ? `${r.tier !== 'white' ? btn('ask-downgrade:' + r.number, '换白卡回池', 'admin-btn frog-admin-btn is-warn') : ''}${btn('open-edit:' + r.number, '改卡', 'admin-btn frog-admin-btn')}`
+          : '';
+        const origHtml = r.overridden && r.originalTier
+          ? `<span class="frog-record-orig">原 ${tierLabel(r.originalTier)}</span>`
+          : '';
+        return (
+          `<li class="frog-record-item" data-number="${r.number}" data-tier="${r.tier}">` +
+          `<div class="frog-record-head">` +
+          `<span class="frog-record-num">#${r.number}</span>` +
+          `<span class="frog-record-tag ${r.tier}">${tierLabel(r.tier)}</span>` +
+          `${origHtml}` +
+          `<span class="frog-record-meta">${names[r.slot] || '见面包'} · QQ ${r.qq}</span>` +
+          `<div class="frog-record-ops">${claimHtml}${editOps}</div>` +
+          `</div></li>`
+        );
+      }).join('');
+
+      box.innerHTML =
+        `<div class="frog-admin-summary">` +
+        `<p class="frog-admin-stat">${life[res.status]} · 已拆 <b>${res.rows.length}</b> 包 · 奖池总余 <b>${res.remaining}</b> 包</p>` +
+        `<div class="frog-admin-stock" aria-label="各档奖池余量">${stockChips}</div>` +
+        `<div class="frog-admin-actions">${lifecycleBtns}</div>` +
+        `</div>` +
+        `<ol class="frog-records">${listHtml}</ol>`;
     } catch (e) {
-      box.replaceChildren();
+      if (op === 'list') box.replaceChildren();
       note.textContent = e.message;
     }
   }
@@ -915,13 +965,58 @@ export function createRaffleUI({ $, call, auth }) {
       $('#frogAdminBody').onclick = e => {
         const el = e.target.closest('[data-frog]');
         if (!el) return;
-        const [op, num] = el.dataset.frog.split(':');
+        const [op, numStr] = el.dataset.frog.split(':');
+        const num = numStr ? Number(numStr) : undefined;
         if (op === 'ask-end') {
-          el.outerHTML = btn('end', '确认永久结束') + btn('list', '取消');
+          el.outerHTML = btn('end', '确认永久结束', 'admin-btn frog-admin-btn is-danger') + btn('list', '取消', 'admin-btn frog-admin-btn');
+          return;
+        }
+        if (op === 'ask-downgrade') {
+          const ops = el.closest('.frog-record-ops');
+          if (ops) ops.innerHTML = btn(`confirm-downgrade:${num}`, '确认换回白卡并放回奖池', 'admin-btn frog-admin-btn is-danger') + btn('list', '取消', 'admin-btn frog-admin-btn');
+          return;
+        }
+        if (op === 'confirm-downgrade') {
+          el.disabled = true;
+          admin('override', { number: num, tier: 'white', returnToPool: true });
+          return;
+        }
+        if (op === 'open-edit') {
+          const item = el.closest('.frog-record-item');
+          if (!item) return;
+          $('#frogAdminBody').querySelectorAll('.frog-record-edit').forEach(n => n.remove());
+          const curTier = item.dataset.tier;
+          const defaultTier = curTier === 'white' ? 'silver' : 'white';
+          const left = lastAdminRes?.left || {};
+          const opts = ['white', 'silver', 'gold', 'prism'].map(k => {
+            const label = tiers[k][2];
+            const suffix = k === curTier ? '（当前）' : `（池余 ${left[k] ?? 0}）`;
+            return `<option value="${k}" ${k === curTier ? 'disabled' : ''} ${k === defaultTier ? 'selected' : ''}>${label}${suffix}</option>`;
+          }).join('');
+          item.insertAdjacentHTML('beforeend',
+            `<div class="frog-record-edit">` +
+            `<label>替换为 <select class="frog-edit-tier" aria-label="目标卡片档位">${opts}</select></label>` +
+            `<label class="frog-edit-pool"><input type="checkbox" class="frog-edit-return" checked> 同步更新奖池（原卡放回，目标卡扣减）</label>` +
+            `<div class="frog-edit-btns">${btn(`apply-edit:${num}`, '确认替换', 'admin-btn admin-btn-primary frog-admin-btn')}${btn(`cancel-edit:${num}`, '取消', 'admin-btn frog-admin-btn')}</div>` +
+            `</div>`
+          );
+          return;
+        }
+        if (op === 'cancel-edit') {
+          el.closest('.frog-record-edit')?.remove();
+          return;
+        }
+        if (op === 'apply-edit') {
+          const editor = el.closest('.frog-record-edit');
+          const tier = editor?.querySelector('.frog-edit-tier')?.value;
+          const returnToPool = Boolean(editor?.querySelector('.frog-edit-return')?.checked);
+          if (!tier) return;
+          el.disabled = true;
+          admin('override', { number: num, tier, returnToPool });
           return;
         }
         el.disabled = true;
-        admin(op, num ? Number(num) : undefined);
+        admin(op, num ? { number: num } : {});
       };
 
       announce();

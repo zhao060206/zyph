@@ -16,7 +16,7 @@ module.exports = function createRaffle(adapter) {
     for (;;) {
       const event = await read(events.length);
       if (!event) {lastChecked=now();return;}
-      if (!['draw','pause','publish','end','claim'].includes(event.action)) throw new Error('卡袋记录格式无效');
+      if (!['draw','pause','publish','end','claim','override'].includes(event.action)) throw new Error('卡袋记录格式无效');
       events.push(event);
     }
   }
@@ -24,11 +24,32 @@ module.exports = function createRaffle(adapter) {
     for (;counted<events.length;counted++) {
       const event=events[counted];
       if (event.action==='draw') {
-        if(tally.remaining){tally.left[event.tier]--;tally.remaining--;}
-        tally.draws.push(event);tally.byQQ.set(event.qq,event.owner);
+        // 用浅拷贝记录与池来源标记避免污染原始不可变事件对象，同时让 draws 与 byOwner 共享引用。
+        const fromPool=tally.remaining>0;
+        if(fromPool){tally.left[event.tier]--;tally.remaining--;}
+        const row={...event,fromPool};
+        tally.draws.push(row);tally.byQQ.set(event.qq,event.owner);
         if(!tally.byOwner.has(event.owner))tally.byOwner.set(event.owner,[]);
-        tally.byOwner.get(event.owner).push(event);
+        tally.byOwner.get(event.owner).push(row);
         if(event.number===40&&!event.slot)tally.status='ended';
+      } else if (event.action==='override') {
+        const row=tally.draws.find(item=>item.number===event.number);
+        if(row){
+          const oldTier=row.tier,newTier=event.tier,syncPool=event.returnToPool!==false;
+          if(oldTier!==newTier){
+            if(syncPool){
+              // 原卡放回奖池（非池内兜底白卡不虚增库存），再从池内扣减目标档位。
+              if(oldTier!=='white'||row.fromPool) tally.left[oldTier]++;
+              if(tally.left[newTier]>0){tally.left[newTier]--;row.fromPool=true;}
+              else row.fromPool=false;
+              tally.remaining=tally.left.white+tally.left.silver+tally.left.gold+tally.left.prism;
+            }
+            if(!row.originalTier) row.originalTier=oldTier;
+            row.tier=newTier;
+            row.overridden=true;
+            tally.claims.delete(row.number);
+          }
+        }
       } else if (event.action==='claim') tally.claims.add(event.number);
       else tally.status=({pause:'paused',publish:'published',end:'ended'})[event.action];
     }
@@ -66,11 +87,26 @@ module.exports = function createRaffle(adapter) {
         const row=s.draws.find(r=>r.number===body.number&&r.tier!=='white');
         if(!row) fail(404,'中奖记录不存在');
         if(!s.claims.has(row.number)) await save({action:'claim',number:row.number,ts:now()});
+      } else if(op==='override') {
+        if(s.status==='ended') fail(409,'本期已结束，无法调整奖池或卡片');
+        const number=Number(body.number),tier=String(body.tier||''),returnToPool=body.returnToPool!==false;
+        const row=s.draws.find(r=>r.number===number);
+        if(!row) fail(404,'中奖记录不存在');
+        if(!Object.prototype.hasOwnProperty.call(stock,tier)) fail(400,'目标卡片档位无效');
+        if(row.tier===tier) fail(400,'这张卡已经是该档位了');
+        if(returnToPool && tier!=='white' && s.left[tier]<=0) fail(409,'奖池中已没有剩余的该档位卡片，请先将其他同类卡放回奖池，或取消勾选“同步更新奖池”后单独调整');
+        await save({action:'override',number:row.number,tier,returnToPool,ts:now()});
       } else if(op!=='list') {
         if(!({pause:s.status==='published',publish:s.status==='paused',end:s.status!=='ended'})[op] || !['pause','publish','end'].includes(op)) fail(409,'当前状态无法进行此操作');
         await save({action:op,ts:now()});
       }
-      const updated=state(); return json(res,200,{status:updated.status,remaining:updated.remaining,rows:updated.draws.map(row=>({...result(row),qq:row.qq,ts:row.ts,claimed:updated.claims.has(row.number)}))});
+      const updated=state();
+      return json(res,200,{
+        status:updated.status,
+        remaining:updated.remaining,
+        left:{...updated.left},
+        rows:updated.draws.map(row=>({...result(row),slot:row.slot||'welcome',qq:row.qq,ts:row.ts,claimed:updated.claims.has(row.number),overridden:Boolean(row.overridden),originalTier:row.originalTier||null}))
+      });
     }
     const own=s.byOwner.get(key)||[];
     if(!pending&&own.length && s.status==='published') {

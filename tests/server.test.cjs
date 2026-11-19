@@ -106,6 +106,62 @@ test('raffle pause, publish and permanent close preserve the edition',async t=>{
   assert.equal((await set('publish')).data.status,'published'); assert.equal((await set('end')).data.status,'ended');assert.equal((await set('publish')).status,409);
 });
 
+test('raffle admin can override a drawn card tier, return the original prize to the pool, and replay accurately after restart',async t=>{
+  const site=await app(t);
+  const journal=path.join(site.dir,'private/darkbag-02');fs.mkdirSync(journal,{recursive:true});
+  const seeded=[...Array(32).fill('white'),...Array(4).fill('silver'),...Array(2).fill('gold'),'prism'];
+  seeded.forEach((tier,i)=>fs.writeFileSync(path.join(journal,String(i).padStart(4,'0')+'.json'),JSON.stringify({action:'draw',slot:'welcome',tier,owner:'seed'+i,qq:String(40000+i),number:i+1,ts:1})));
+  const api=async(route,body,cookie='')=>{const resp=await fetch(site.base+'/api/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',cookie},body:body?JSON.stringify(body):undefined});return {status:resp.status,data:await resp.json(),cookie:resp.headers.get('set-cookie')?.split(';')[0]};};
+
+  assert.equal((await api('raffle/admin',{action:'override',number:1,tier:'silver'})).status,403);
+
+  // 第 40 袋必中唯一剩余的银卡；随后由后台兑换成白卡并将银卡放回奖池。
+  const first=await api('raffle/join',{qq:'50001'});
+  const drawn=await api('raffle/draw',{slot:'welcome'},first.cookie);
+  assert.deepEqual(drawn.data.result,{number:40,tier:'silver'});
+  assert.equal(drawn.data.remaining,0);
+
+  const claimed=await api('raffle/admin',{...admin,action:'claim',number:40});
+  assert.equal(claimed.data.rows[39].claimed,true);
+
+  const downgraded=await api('raffle/admin',{...admin,action:'override',number:40,tier:'white',returnToPool:true});
+  assert.equal(downgraded.status,200);
+  assert.equal(downgraded.data.remaining,1);
+  assert.equal(downgraded.data.left.silver,1);
+  assert.equal(downgraded.data.rows[39].tier,'white');
+  assert.equal(downgraded.data.rows[39].originalTier,'silver');
+  assert.equal(downgraded.data.rows[39].overridden,true);
+  assert.equal(downgraded.data.rows[39].claimed,false);
+
+  const ownStatus=await api('raffle',null,first.cookie);
+  assert.deepEqual(ownStatus.data.result,{number:40,tier:'white'});
+  assert.equal(ownStatus.data.remaining,1);
+  assert.equal('originalTier' in ownStatus.data.result,false);
+  assert.equal('overridden' in ownStatus.data.result,false);
+  assert.deepEqual((await api('raffle/draw',{slot:'welcome'},first.cookie)).data.result,{number:40,tier:'white'});
+
+  // 复制目录重启实例验证事件溯源回放完全一致，且新访客可抽走放回池中的银卡。
+  const replay=await app(t);fs.cpSync(site.dir,replay.dir,{recursive:true});
+  const replayAdmin=await (await fetch(replay.base+'/api/raffle/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...admin,action:'list'})})).json();
+  assert.equal(replayAdmin.remaining,1);assert.equal(replayAdmin.left.silver,1);
+  assert.equal(replayAdmin.rows[39].tier,'white');assert.equal(replayAdmin.rows[39].overridden,true);
+
+  const second=await api('raffle/join',{qq:'50002'});
+  const redrawn=await api('raffle/draw',{slot:'welcome'},second.cookie);
+  assert.deepEqual(redrawn.data.result,{number:41,tier:'silver'});
+  assert.equal(redrawn.data.remaining,0);
+
+  // 奖池中无金卡时，勾选同步更新奖池报错 409；取消同步奖池可单独改卡且库存不变负。
+  assert.equal((await api('raffle/admin',{...admin,action:'override',number:1,tier:'gold',returnToPool:true})).status,409);
+  const forced=await api('raffle/admin',{...admin,action:'override',number:1,tier:'gold',returnToPool:false});
+  assert.equal(forced.status,200);assert.equal(forced.data.rows[0].tier,'gold');
+  assert.equal(forced.data.left.gold,0);assert.equal(forced.data.remaining,0);
+
+  // 活动永久结束后禁止再调整卡片。
+  assert.equal((await api('raffle/admin',{...admin,action:'end'})).status,200);
+  assert.equal((await api('raffle/admin',{...admin,action:'override',number:2,tier:'gold',returnToPool:false})).status,409);
+});
+
 test('new installations keep activities in draft and require admin authentication', async t => {
   const site = await app(t);
   assert.equal((await site.request('/api/health')).data.ok, true);

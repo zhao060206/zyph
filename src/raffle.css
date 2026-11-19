@@ -1710,3 +1710,176 @@ html[data-motion=none] .frog-card-glare {
     margin: 10px 0 12px;
   }
 }
+
+/* ===== 9. 站长后台控卡与奖池库存面板 ===== */
+.frog-admin-summary {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 16px;
+  padding: 14px 16px;
+  border-radius: var(--card-radius, 8px);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+}
+
+.frog-admin-stat {
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.frog-admin-stock,
+.frog-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.frog-admin-btn {
+  min-height: 34px;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.frog-admin-btn.is-warn {
+  border-color: rgba(194, 89, 12, .45);
+  color: #b45309;
+}
+
+.frog-admin-btn.is-danger {
+  border-color: rgba(204, 58, 45, .5);
+  color: var(--coral, #c83e2b);
+}
+
+html[data-theme=dark] .frog-admin-btn.is-warn {
+  border-color: rgba(251, 191, 36, .45);
+  color: #fbbf24;
+}
+
+.frog-records {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.frog-record-item {
+  padding: 10px 12px;
+  border-radius: var(--card-radius, 8px);
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.frog-record-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.frog-record-num {
+  font: 600 12.5px/1 var(--mono, monospace);
+  color: var(--muted);
+  min-width: 34px;
+}
+
+.frog-record-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font: 600 11.5px/1.2 var(--sans);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--text);
+}
+
+.frog-record-tag.silver {
+  background: #e5ebf0;
+  color: #242d35;
+  border-color: #b6c2cd;
+}
+
+.frog-record-tag.gold {
+  background: #fbf0c8;
+  color: #5b3e0e;
+  border-color: #d9b25a;
+}
+
+.frog-record-tag.prism {
+  background: linear-gradient(120deg, #e7def7, #d9eef5, #f8edd2);
+  color: #292038;
+  border-color: #b5a3d8;
+}
+
+.frog-record-orig {
+  font: 400 11.5px/1.2 var(--sans);
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.frog-record-meta {
+  font: 400 12.5px/1.3 var(--mono, monospace);
+  color: var(--text);
+}
+
+.frog-record-claimed {
+  font: 600 11.5px/1.2 var(--sans);
+  color: var(--mint, #2b6e52);
+  padding: 4px 8px;
+}
+
+.frog-record-ops {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.frog-record-edit {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 12.5px;
+}
+
+.frog-record-edit select {
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: var(--control-radius, 6px);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-subtle);
+  color: var(--text);
+}
+
+.frog-edit-pool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.frog-edit-pool input {
+  width: auto;
+  min-height: auto;
+}
+
+.frog-edit-btns {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+
+@media (max-width: 620px) {
+  .frog-record-ops,
+  .frog-edit-btns {
+    margin-left: 0;
+    width: 100%;
+  }
+}
