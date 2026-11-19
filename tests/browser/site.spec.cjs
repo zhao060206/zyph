@@ -37,13 +37,38 @@ test('milk frog announcement and three separately earned packs survive reload',a
   await page.locator('#frogQQ').fill(String(80000000+info.workerIndex*10000+Math.floor(Math.random()*9999)));
   await page.getByRole('button',{name:'领取入场包'}).click();await expect(page.locator('.frog-tear')).toBeVisible();
   if(info.project.name==='desktop-chromium'){
-    const box=await page.locator('.frog-tear').boundingBox();await page.mouse.move(box.x+20,box.y+15);await page.mouse.down();await page.mouse.move(box.x+135,box.y+15,{steps:8});await page.mouse.up();
+    const box=await page.locator('.frog-tear').boundingBox();await page.mouse.move(box.x+15,box.y+15);await page.mouse.down();await page.mouse.move(box.x+box.width*.82,box.y+15,{steps:8});await page.mouse.up();
   }else await page.locator('.frog-tear').click();
   const card=page.locator('.frog-card');await expect(card).toBeVisible();await expect(card.locator('img')).toHaveJSProperty('naturalWidth',512);
   await page.locator('#frogClose').click();await page.locator('.album-cover').first().click();await page.locator('.gp-preview-item').first().click();
   await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/like')&&r.ok()),page.locator('#likeBtn').click()]);await page.locator('#lbClose').click();await page.locator('#frogReturn').click();
   for(const slot of ['photo','social']){await page.locator(`[data-frog="open:${slot}"]`).first().click();await page.locator('.frog-tear').press('Enter');await expect(page.locator('.frog-theater > .frog-card')).toBeVisible();await page.locator('[data-frog="wall"]').click();}
   await expect(page.locator('[data-frog^="show:"]')).toHaveCount(3);await page.goto('/');await expect(page.locator('#frogModal')).toBeHidden();await page.locator('#frogOpen').click();await expect(page.locator('[data-frog^="show:"]')).toHaveCount(3);
+});
+
+test('milk frog foil follows the finger and exposed cards switch without a draw',async({page},info)=>{
+  const mobile=info.project.name.includes('mobile'),touch=info.project.name==='mobile-chromium';
+  const packs=[{slot:'welcome',earned:true,card:{tier:'silver',number:8}},{slot:'photo',earned:true,card:null},{slot:'social',earned:true,card:{tier:'gold',number:12}}];let draws=0;
+  const snapshot=()=>({joined:true,status:'published',remaining:25,packs});
+  await page.route('**/api/raffle',r=>r.fulfill({json:snapshot()}));
+  await page.route('**/api/raffle/draw',r=>{draws++;expect(r.request().postDataJSON()).toEqual({slot:'photo'});packs[1].card={tier:'white',number:16};return r.fulfill({json:snapshot()});});
+  await page.goto('/');await page.locator('[data-frog="open:photo"]').first().click();const tear=page.locator('.frog-tear'),pouch=tear.locator('.foil-interactive');const box=await tear.boundingBox(),y=box.y+box.height*.1,start=box.x+box.width*.86;
+  const cdp=touch?await page.context().newCDPSession(page):null;
+  const down=async()=>{if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:start,y}]});else{await page.mouse.move(start,y);await page.mouse.down();}};
+  const move=async fraction=>{const x=start-box.width*fraction;if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y}]});else await page.mouse.move(x,y,{steps:5});};
+  const up=async()=>{if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});else await page.mouse.up();};
+  await down();await move(.32);await expect(pouch).toHaveClass(/pull-left/);
+  const seam=await pouch.evaluate(p=>({clip:getComputedStyle(p.querySelector('.foil-intact')).clipPath,turn:getComputedStyle(p.querySelector('.foil-flap')).transform,progress:parseFloat(getComputedStyle(p).getPropertyValue('--tear'))}));
+  expect(seam.progress).toBeGreaterThan(.4);expect(seam.progress).toBeLessThan(.7);expect(seam.clip).not.toBe('none');expect(seam.turn).not.toBe('matrix(1, 0, 0, 1, 0, 0)');
+  await up();await expect(tear).toBeVisible();expect(draws).toBe(0);
+  await down();await move(.76);await up();const front=page.locator('.frog-theater > .frog-card'),caption=page.locator('.frog-caption h3');await expect(front).toContainText('016');await expect(caption).toHaveText('奶蛙收藏卡');
+  const stage=page.locator('.frog-theater');
+  async function pressExposed(side){const point=await stage.evaluate((root,side)=>{const target=root.querySelector('.foil-sibling.'+side),b=root.getBoundingClientRect(),y=b.y+b.height*.5;const hits=[];for(let x=b.left+2;x<b.right-2;x+=2){if(target.contains(document.elementFromPoint(x,y)))hits.push(x);}return hits.length>8?{x:hits[Math.floor(hits.length/2)],y}:null;},side);expect(point).not.toBeNull();if(mobile)await page.touchscreen.tap(point.x,point.y);else await page.mouse.click(point.x,point.y);}
+  await expect(page.locator('.frog-deck-nav span')).toHaveText('2 / 3');await expect.poll(async()=>page.locator('.foil-sibling.left').evaluate(e=>{const b=e.getBoundingClientRect(),f=e.parentNode.querySelector(':scope > .frog-card').getBoundingClientRect();return f.left-b.left;})).toBeGreaterThan(12);
+  await pressExposed('left');await expect(front).toContainText('008');await expect(caption).toHaveText('随机照片冰箱贴');
+  const bounds=await stage.boundingBox(),faceBox=await front.boundingBox();expect(faceBox.y).toBeGreaterThanOrEqual(bounds.y);expect(faceBox.y+faceBox.height).toBeLessThanOrEqual(bounds.y+bounds.height+1);
+  await pressExposed('right');await expect(front).toContainText('016');if(mobile)await front.tap();else await front.click();await expect(front).toContainText('012');await expect(caption).toHaveText('奈雪杨枝甘露套餐');
+  await page.keyboard.press('ArrowRight');await expect(front).toContainText('008');await page.getByRole('button',{name:'上一张卡'}).click();await expect(front).toContainText('012');expect(draws).toBe(1);if(cdp)await cdp.detach();
 });
 
 test('gallery, search, year filter, empty album and themes work without script errors', async ({ page }) => {
