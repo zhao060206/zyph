@@ -10,8 +10,16 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
   return {
     data: null,
     publicData: null,
+    liveCount: 0,
     busy: false,
     auth() { return { sid: Admin.getSid(), skey: Admin.getSkey(), token: $('#adminToken') ? $('#adminToken').value : '' }; },
+    /** 联动惊喜抽奖与投票/征集活动状态，控制首页活动板块与顶部导航的显隐。 */
+    syncVisibility() {
+      const frogVisible = Boolean($('#frogOpen') && !$('#frogOpen').hidden);
+      const hasActivities = frogVisible || this.liveCount > 0;
+      $('#activities').hidden = !hasActivities;
+      $('#navActivities').hidden = !hasActivities;
+    },
     async call(path, body) {
       const response = await fetchWithTimeout((CONFIG.apiBase || '') + path, body ? {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -25,8 +33,8 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
         const data = await this.call('/api/activities');
         this.publicData = data;
         const live = data.current.filter(item => item.config.status === 'published');
-        const hasActivities=!!$('#frogOpen')||live.length>0||data.history.length>0;
-        $('#activities').hidden=!hasActivities;$('#navActivities').hidden=!hasActivities;
+        this.liveCount = live.length;
+        this.syncVisibility();
         clearTimeout(this.expiryTimer);
         const deadlines = live.filter(item => item.config.deadline).map(item => Date.parse(item.config.deadline.replace(' ', 'T') + '+08:00')).filter(Number.isFinite);
         if (deadlines.length) this.expiryTimer = setTimeout(() => {
@@ -39,10 +47,12 @@ export function createEventCenter({ $, esc, fetchWithTimeout, CONFIG, Admin, Vot
           <p class="event-time">${item.config.deadline ? '截止：' + esc(displayTime(item.config.deadline)) + '（北京时间）' : '进行中'}</p>
           <button type="button" data-open-event="${item.type}">${item.type === 'voting' ? '去投票' : '投递作品'} <span aria-hidden="true">↗</span></button></article>`).join('') :
           '';
-        $('#pastActivities').hidden = !data.history.length;
-        $('#pastActivitiesList').innerHTML = data.history.map(item => `
-          <div class="history-summary"><strong>${esc(item.config.title)}</strong><span>${typeLabel(item.type)} · ${item.participants} 人参与 · ${item.count} ${item.type === 'voting' ? '票' : '张照片'} · ${esc(displayTime(item.config.endedAt))} 结束</span></div>`).join('');
+        // 主页不再展示往期活动折叠条，历史记录统一留存后台「活动记录」。
+        $('#pastActivities').hidden = true;
+        $('#pastActivitiesList').innerHTML = '';
       } catch (error) {
+        this.liveCount = 0;
+        this.syncVisibility();
         $('#publicActivities').innerHTML = '<p class="empty">活动信息暂时无法读取。<button class="tool-btn" type="button" data-refresh-events>重新加载</button></p>';
       }
     },

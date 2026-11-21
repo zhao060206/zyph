@@ -3576,7 +3576,7 @@ const Admin={
 };
 
 const EventCenter=createEventCenter({$,esc,fetchWithTimeout,CONFIG,Admin,Vote,Submission});
-const Frog=createRaffleUI({$,call:(action,body)=>EventCenter.call('/api/raffle'+action,body),auth:()=>EventCenter.auth()});
+const Frog=createRaffleUI({$,call:(action,body)=>EventCenter.call('/api/raffle'+action,body),auth:()=>EventCenter.auth(),onChange:()=>EventCenter.syncVisibility()});
 const Dialogs=setupDialogs({
   frogModal:()=>Frog.close(),
   lightbox:()=>Lightbox.close(),voteNoticeModal:()=>Vote.closeNotice(),

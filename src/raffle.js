@@ -107,7 +107,7 @@ function bindDeckTap(stage) {
   }, { passive: false });
 }
 
-export function createRaffleUI({ $, call, auth }) {
+export function createRaffleUI({ $, call, auth, onChange }) {
   const modal = $('#frogModal'), body = $('#frogBody'), message = $('#frogMessage');
   const preloaded = new Set();
   const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
@@ -150,14 +150,33 @@ export function createRaffleUI({ $, call, auth }) {
     }, 2400);
   }
 
+  /** 根据活动状态与参与态同步首页入口卡片、悬浮按钮及弹窗状态标签，并通知活动区显隐联动。 */
+  function syncEntry(status, joined) {
+    const isLive = status === 'published';
+    const entry = $('#frogOpen');
+    if (entry) entry.hidden = !isLive;
+    const ret = $('#frogReturn');
+    if (ret) {
+      ret.hidden = !(isLive && joined);
+      if (!isLive || !joined) delete ret.dataset.unopened;
+    }
+    const liveTag = modal.querySelector('.frog-live-tag');
+    if (liveTag) liveTag.textContent = life[status] || '已结束';
+    onChange?.();
+  }
+
   function remember(next) {
     data = next;
     active = next.joined && next.status === 'published';
-    const ret = $('#frogReturn');
-    ret.hidden = !next.joined;
-    const unopened = next.status === 'published' ? next.packs.filter(v => v.earned && !v.card).length : 0;
-    if (unopened > 0) ret.dataset.unopened = String(unopened);
-    else delete ret.dataset.unopened;
+    syncEntry(next.status, next.joined);
+    if (active) {
+      const ret = $('#frogReturn');
+      const unopened = next.packs.filter(v => v.earned && !v.card).length;
+      if (ret) {
+        if (unopened > 0) ret.dataset.unopened = String(unopened);
+        else delete ret.dataset.unopened;
+      }
+    }
     try { localStorage.setItem(joinedKey, active ? '1' : '0'); } catch {}
     preloadOwned(next.packs);
   }
@@ -799,23 +818,28 @@ export function createRaffleUI({ $, call, auth }) {
     }
   }
 
-  async function announce() {
-    // 禁用存储导致无法持久化“已读告示”标记时，不自动弹窗打断画廊浏览，访客仍可从活动入口手动打开。
-    try { if (sessionStorage.getItem(seenKey)) return; } catch { return; }
-    if (location.hash || document.hidden) return;
+  /** 同步惊喜抽奖状态并控制入口显隐；仅在允许自动弹窗且不打断当前浏览时打开告示。 */
+  async function syncStatus({ allowAnnounce = false } = {}) {
     const id = version;
     try {
       const next = await call('');
+      if (id !== version) return;
+      remember(next);
+      if (!allowAnnounce) return;
+      // 禁用存储导致无法持久化“已读告示”标记时，不自动弹窗打断画廊浏览，访客仍可从活动入口手动打开。
+      try { if (sessionStorage.getItem(seenKey)) return; } catch { return; }
       if (
-        id !== version || announced || next.status !== 'published' || document.hidden || location.hash ||
+        announced || next.status !== 'published' || document.hidden || location.hash || !modal.hidden ||
         document.querySelector('[aria-modal="true"]:not([hidden]):not(#lightbox)') ||
         document.documentElement.dataset.dialogOpen === 'true'
       ) return;
-      remember(next);
       flag();
       modal.hidden = false;
       render();
-    } catch { /* 活动状态未拉取成功时静默降级，不阻断相册主体浏览。 */ }
+    } catch {
+      // 首次拉取失败时保持隐藏，已有有效数据时不误清已显示入口。
+      if (!data) syncEntry('ended', false);
+    }
   }
 
   let lastAdminRes = null;
@@ -828,6 +852,13 @@ export function createRaffleUI({ $, call, auth }) {
     try {
       const res = await call('/admin', { ...auth(), action: op, ...bodyPayload });
       lastAdminRes = res;
+      if (data) data.status = res.status;
+      if (res.status !== 'published') {
+        active = false;
+        try { localStorage.setItem(joinedKey, '0'); } catch {}
+      }
+      syncEntry(res.status, Boolean(data?.joined));
+      if (op === 'publish' && !data) syncStatus({ allowAnnounce: false });
       const tierLabel = t => tiers[t]?.[2] || t;
       if (op === 'override') note.textContent = `已将 #${bodyPayload.number} 改为${tierLabel(bodyPayload.tier)}${bodyPayload.returnToPool ? '并同步更新奖池' : ''}`;
       else if (op === 'claim') note.textContent = `已标记 #${bodyPayload.number} 为已兑付`;
@@ -902,7 +933,8 @@ export function createRaffleUI({ $, call, auth }) {
       notice.hidden = true;
       document.body.append(notice);
 
-      $('#frogReturn').hidden = !active;
+      $('#frogOpen').hidden = true;
+      $('#frogReturn').hidden = true;
       $('#frogOpen').onclick = $('#frogReturn').onclick = open;
       $('#frogClose').onclick = close;
 
@@ -1019,7 +1051,13 @@ export function createRaffleUI({ $, call, auth }) {
         admin(op, num ? { number: num } : {});
       };
 
-      announce();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && modal.hidden && !busy) {
+          syncStatus({ allowAnnounce: false });
+        }
+      });
+
+      syncStatus({ allowAnnounce: true });
     },
   };
 }

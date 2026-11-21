@@ -71,6 +71,65 @@ test('milk frog foil follows the finger and exposed cards switch without a draw'
   await page.keyboard.press('ArrowRight');await expect(front).toContainText('008');await page.getByRole('button',{name:'上一张卡'}).click();await expect(front).toContainText('012');expect(draws).toBe(1);if(cdp)await cdp.detach();
 });
 
+test('milk frog hides home entries and activity section when paused or ended without live activities', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('pt_frog_joined_v2', '1'));
+  let raffleStatus = 'paused';
+  let activitiesPayload = {
+    current: [],
+    history: [{ type: 'voting', config: { title: '往期摄影评选', status: 'ended', endedAt: 1700000000000 }, participants: 3, count: 5 }],
+  };
+  await page.route('**/api/activities', route => route.fulfill({ json: activitiesPayload }));
+  await page.route('**/api/raffle', route => route.fulfill({
+    json: {
+      status: raffleStatus,
+      remaining: 20,
+      joined: true,
+      packs: [
+        { slot: 'welcome', earned: true, card: { tier: 'white', number: 1 } },
+        { slot: 'photo', earned: false, card: null },
+        { slot: 'social', earned: false, card: null },
+      ],
+    },
+  }));
+
+  const assertAllHidden = async () => {
+    for (const sel of ['#frogModal', '#frogOpen', '#frogReturn', '#pastActivities', '#activities', '#navActivities']) {
+      await expect(page.locator(sel)).toBeHidden();
+    }
+  };
+
+  await Promise.all([
+    page.waitForResponse(r => r.url().endsWith('/api/activities')),
+    page.waitForResponse(r => r.url().endsWith('/api/raffle')),
+    page.goto('/'),
+  ]);
+  await assertAllHidden();
+
+  raffleStatus = 'ended';
+  await Promise.all([
+    page.waitForResponse(r => r.url().endsWith('/api/activities')),
+    page.waitForResponse(r => r.url().endsWith('/api/raffle')),
+    page.reload(),
+  ]);
+  await assertAllHidden();
+
+  activitiesPayload = {
+    current: [{ type: 'voting', config: { title: '进行中摄影评选', status: 'published', maxVotes: 1 }, participants: 0, count: 0 }],
+    history: activitiesPayload.history,
+  };
+  await Promise.all([
+    page.waitForResponse(r => r.url().endsWith('/api/activities')),
+    page.waitForResponse(r => r.url().endsWith('/api/raffle')),
+    page.reload(),
+  ]);
+  await expect(page.locator('#activities')).toBeVisible();
+  await expect(page.locator('#navActivities')).toBeVisible();
+  await expect(page.locator('[data-open-event="voting"]')).toBeVisible();
+  for (const sel of ['#frogOpen', '#frogReturn', '#pastActivities']) {
+    await expect(page.locator(sel)).toBeHidden();
+  }
+});
+
 test('gallery, search, year filter, empty album and themes work without script errors', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');

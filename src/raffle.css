@@ -119,6 +119,7 @@ html[data-theme=dark] .frog-entry-copy em {
   filter: brightness(1.06);
 }
 
+.frog-entry[hidden],
 .frog-modal[hidden],
 .frog-return[hidden],
 #frogToast[hidden] {
